@@ -86,7 +86,7 @@
     if (on) url.searchParams.set("review", "1");
     else url.searchParams.delete("review");
     try { window.history.replaceState(null, "", url); } catch (e) { /* file:// */ }
-    if (on) start();
+    if (on) start(true);
     else stop();
   }
 
@@ -474,6 +474,7 @@
 
   function renderTray() {
     if (!document.body.classList.contains("tr-review-on")) return;
+    if (!signedIn()) return showSignIn();
     var all = pendingAll();
     if (!tray) {
       tray = el("div", { class: "tr-tray", role: "region", "aria-live": "polite", "aria-label": S.submit });
@@ -481,11 +482,11 @@
     }
     tray.innerHTML = "";
     if (resultBox) tray.appendChild(resultBox);
-    if (!all.length) {
-      tray.hidden = !resultBox;
-      return;
-    }
-    tray.hidden = false;
+    // Who is reviewing stays visible for the whole review, not only once there is something to submit.
+    var who = signedInLine();
+    if (who) tray.appendChild(who);
+    tray.hidden = !all.length && !resultBox && !who;
+    if (!all.length) return;
     var list = all.filter(isActive);
     if (list.length) renderActive(list);
     var held = all.filter(isHeld);
@@ -543,12 +544,6 @@
     var submit = el("button", { type: "button", class: "btn btn-sm btn-primary", onclick: submitAll }, [S.submit]);
     if (!data.service) submit.disabled = true;
     tray.appendChild(submit);
-    var who = signedInLine();
-    if (who) tray.appendChild(who);
-    if (signInError) {
-      tray.appendChild(el("p", { class: "tr-error", role: "alert" }, [S.signInDenied]));
-      signInError = null;
-    }
     if (pages.length > 1 && here) {
       tray.appendChild(el("button", { type: "button", class: "btn btn-sm btn-link", onclick: function () {
         setPendingAll(pendingAll().filter(function (p) { return !(onThisPage(p) && isActive(p)); }));
@@ -589,10 +584,37 @@
     return serviceUrl("/auth/login") + "&return=" + encodeURIComponent(window.location.href.split("#")[0]);
   }
 
+  // A site without a PR service can still be reviewed locally; one with a service
+  // asks for GitHub sign-in before the review starts, not when it is submitted.
+  function signedIn() {
+    return !data || !data.service || !!(load("login", null) && load("session", null));
+  }
+
   function signOut() {
     save("session", null);
     save("login", null);
+    close();
+    detach();
     renderTray();
+  }
+
+  // Shown instead of the review UI while signed out (sign-in cancelled, expired,
+  // or signed out). Pending changes are kept and come back after signing in.
+  function showSignIn() {
+    if (!tray) {
+      tray = el("div", { class: "tr-tray", role: "region", "aria-live": "polite", "aria-label": S.submit });
+      document.body.appendChild(tray);
+    }
+    tray.hidden = false;
+    tray.innerHTML = "";
+    if (signInError) {
+      tray.appendChild(el("p", { class: "tr-error", role: "alert" }, [S.signInDenied]));
+      signInError = null;
+    }
+    tray.appendChild(el("div", { class: "tr-login" }, [
+      el("a", { class: "btn btn-sm btn-dark", href: signInHref() }, [S.signIn]),
+      el("small", { class: "tr-login-why" }, [" " + S.signInWhy]),
+    ]));
   }
 
   function signedInLine() {
@@ -604,65 +626,55 @@
     ]);
   }
 
-  function ensureLogin(cb) {
-    var me = load("login", null);
-    if (me && load("session", null)) return cb(me);
-    tray.innerHTML = "";
-    tray.appendChild(el("div", { class: "tr-login" }, [
-      el("a", { class: "btn btn-sm btn-dark", href: signInHref() }, [S.signIn]),
-      el("small", { class: "tr-login-why" }, [" " + S.signInWhy]),
-    ]));
-  }
-
   var submitting = false;
 
   // Only what the service reports as done leaves the list. Anything else
   // (network failure, server error, a check that fails) keeps the reader's work.
   function submitAll() {
     if (submitting) return;
-    ensureLogin(function (login) {
-      var sent = pendingAll().filter(isActive);
-      if (!sent.length) return renderTray();
-      submitting = true;
-      resultBox = null;
-      tray.innerHTML = "";
-      tray.appendChild(el("span", {}, ["…"]));
-      fetch(serviceUrl("/api/submit"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + load("session", "") },
-        body: JSON.stringify({
-          repo: data.repo, lang: data.lang,
-          ops: sent.map(function (p) { return { op: p.op, id: p.id, text: p.text, hash: p.hash, file: p.file }; }),
-        }),
+    if (!signedIn()) return renderTray();
+    var sent = pendingAll().filter(isActive);
+    if (!sent.length) return renderTray();
+    submitting = true;
+    resultBox = null;
+    tray.innerHTML = "";
+    tray.appendChild(el("span", {}, ["…"]));
+    fetch(serviceUrl("/api/submit"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + load("session", "") },
+      body: JSON.stringify({
+        repo: data.repo, lang: data.lang,
+        ops: sent.map(function (p) { return { op: p.op, id: p.id, text: p.text, hash: p.hash, file: p.file }; }),
+      }),
+    })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, body: j || {} }; });
       })
-        .then(function (r) {
-          return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, body: j || {} }; });
-        })
-        .then(function (res) {
-          submitting = false;
-          var b = res.body;
-          if (b.session) save("session", b.session); // the service renewed the GitHub token
-          if (res.status === 401 && b.signin) {
-            // Signed out on GitHub's side (expired or revoked): sign in again; nothing is lost.
-            save("session", null);
-            return ensureLogin(function () {});
-          }
-          var reported = b.applied || b.dropped || b.rejected;
-          if (reported) reconcile(sent, b);
-          if (res.ok && b.pr) return showResult(b);
-          renderTray();
-          // Everything was already in effect (a repeat of a submission whose answer was lost).
-          var allDone = reported && !(b.rejected || []).length && (b.dropped || []).every(function (d) { return d.done; });
-          if (allDone) return;
-          var msg = (b.error || S.submitFailed) + (res.status ? " (" + res.status + ")" : "");
-          tray.appendChild(el("p", { class: "tr-error", role: "alert" }, [msg + (reported ? "" : ". " + S.kept)]));
-        })
-        .catch(function () {
-          submitting = false;
-          renderTray();
-          tray.appendChild(el("p", { class: "tr-error", role: "alert" }, [S.submitFailed + ". " + S.kept]));
-        });
-    });
+      .then(function (res) {
+        submitting = false;
+        var b = res.body;
+        if (b.session) save("session", b.session); // the service renewed the GitHub token
+        if (res.status === 401 && b.signin) {
+          // Signed out on GitHub's side (expired or revoked): sign in again; nothing is lost.
+          save("session", null);
+          detach();
+          return renderTray();
+        }
+        var reported = b.applied || b.dropped || b.rejected;
+        if (reported) reconcile(sent, b);
+        if (res.ok && b.pr) return showResult(b);
+        renderTray();
+        // Everything was already in effect (a repeat of a submission whose answer was lost).
+        var allDone = reported && !(b.rejected || []).length && (b.dropped || []).every(function (d) { return d.done; });
+        if (allDone) return;
+        var msg = (b.error || S.submitFailed) + (res.status ? " (" + res.status + ")" : "");
+        tray.appendChild(el("p", { class: "tr-error", role: "alert" }, [msg + (reported ? "" : ". " + S.kept)]));
+      })
+      .catch(function () {
+        submitting = false;
+        renderTray();
+        tray.appendChild(el("p", { class: "tr-error", role: "alert" }, [S.submitFailed + ". " + S.kept]));
+      });
   }
 
   function opKey(file, op) { return [file, op.id, op.op, op.text || ""].join("\n"); }
@@ -697,12 +709,18 @@
   }
 
   // ---- lifecycle --------------------------------------------------------------------
-  function start() {
+  // fromClick: the reader chose "Review this page" just now, so a signed-out
+  // reader goes straight to GitHub and comes back here in reviewer mode.
+  function start(fromClick) {
     document.body.classList.add("tr-review-on");
     var go = function () {
+      updateToggleText();
+      if (!signedIn()) {
+        if (fromClick) return window.location.assign(signInHref());
+        return renderTray();
+      }
       attach();
       renderTray();
-      updateToggleText();
     };
     if (data) return go();
     fetch(DATA_URL)

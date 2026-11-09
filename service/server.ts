@@ -40,8 +40,9 @@ const home = (p: string) => p.replace(/^~(?=\/|$)/, os.homedir());
 function loadEnv(file: string): void {
   if (!fs.existsSync(file)) return;
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
-    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
+    // KEY=value, KEY="value" or KEY='value'; an unquoted value ends at " #" (a comment).
+    const m = /^\s*([A-Z0-9_]+)\s*=\s*(?:(['"])(.*?)\2|(.*?))\s*(?:\s#.*)?$/.exec(line);
+    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2] ? m[3] : m[4];
   }
 }
 loadEnv(home(opt('env', '~/.config/verso/secrets.env')!));
