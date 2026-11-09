@@ -1,0 +1,268 @@
+/* quarto-i18n: notice and reviewer mode. Colours are custom properties
+   so themes can override them; never colour alone (bar width, pattern, text). */
+
+:root {
+  --tr-accent: #2563eb;
+  --tr-machine: #94a3b8;
+  --tr-reviewed: #0d9488;
+  --tr-full: #15803d;
+  --tr-stale: #b45309;
+  --tr-bg: #f8fafc;
+  --tr-border: #cbd5e1;
+  --tr-text: #1e293b;
+  --tr-muted: #64748b;
+  --tr-pop-bg: #ffffff;
+  --tr-pending: #7c3aed;
+}
+
+body.quarto-dark {
+  --tr-accent: #60a5fa;
+  --tr-machine: #64748b;
+  --tr-reviewed: #2dd4bf;
+  --tr-full: #4ade80;
+  --tr-stale: #fbbf24;
+  --tr-bg: #1e293b;
+  --tr-border: #475569;
+  --tr-text: #e2e8f0;
+  --tr-muted: #94a3b8;
+  --tr-pop-bg: #0f172a;
+  --tr-pending: #a78bfa;
+}
+
+/* Notice */
+.tr-notice {
+  border: 1px solid var(--tr-border);
+  border-left: 4px solid var(--tr-accent);
+  background: var(--tr-bg);
+  color: var(--tr-text);
+  border-radius: 6px;
+  padding: 0.6rem 0.9rem;
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.tr-notice p { margin: 0; }
+.tr-notice a { white-space: nowrap; }
+
+/* Fallback (source-language) blocks are always marked, not only in review mode. */
+main .tr-block[data-tr-status="stale"],
+main .tr-block[data-tr-status="missing"] {
+  border-left: 2px dotted var(--tr-stale);
+  padding-left: 0.6rem;
+  margin-left: -0.75rem;
+}
+
+/* Reviewer mode */
+body.tr-review-on .tr-reviewable {
+  position: relative;
+  cursor: pointer;
+  border-radius: 4px;
+  padding-left: 0.75rem;
+  margin-left: -0.75rem;
+  border-left: 0;
+  outline-offset: 2px;
+}
+body.tr-review-on .tr-reviewable::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.15em;
+  bottom: 0.15em;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--tr-machine);
+}
+body.tr-review-on .tr-reviewable[data-tr-status="machine"]::before { width: 2px; opacity: 0.8; }
+body.tr-review-on .tr-reviewable[data-tr-status="reviewed"]::before { width: 4px; background: var(--tr-reviewed); }
+body.tr-review-on .tr-reviewable[data-tr-reviews="2"]::before,
+body.tr-review-on .tr-reviewable[data-tr-reviews="3"]::before,
+body.tr-review-on .tr-reviewable[data-tr-reviews="4"]::before,
+body.tr-review-on .tr-reviewable[data-tr-reviews="5"]::before { width: 6px; background: var(--tr-full); }
+body.tr-review-on .tr-reviewable[data-tr-status="stale"]::before,
+body.tr-review-on .tr-reviewable[data-tr-status="missing"]::before {
+  width: 5px;
+  background: repeating-linear-gradient(45deg, var(--tr-stale) 0 3px, transparent 3px 6px);
+}
+body.tr-review-on .tr-reviewable:hover,
+body.tr-review-on .tr-reviewable:focus-visible,
+body.tr-review-on .tr-reviewable.tr-open {
+  background: color-mix(in srgb, var(--tr-accent) 7%, transparent);
+}
+body.tr-review-on .tr-reviewable:focus-visible { outline: 2px solid var(--tr-accent); }
+body.tr-review-on .tr-pending::after {
+  content: "";
+  position: absolute;
+  right: -0.4rem;
+  top: 0.35em;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--tr-pending);
+}
+
+/* Status badge: always available to screen readers, shown on hover/focus. */
+.tr-badge {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+body.tr-review-on .tr-reviewable:hover > .tr-badge,
+body.tr-review-on .tr-reviewable:focus-visible > .tr-badge,
+body.tr-review-on .tr-reviewable.tr-open > .tr-badge {
+  clip: auto;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  right: 0;
+  top: -1.35rem;
+  z-index: 2;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0.25rem 0.45rem;
+  border-radius: 999px;
+  background: var(--tr-text);
+  color: var(--tr-pop-bg);
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.tr-heading { display: inline-block; }
+main .tr-heading.tr-block[data-tr-status],
+body.tr-review-on .tr-heading.tr-reviewable { margin-left: 0; padding-left: 0.5rem; }
+.tr-heading > .tr-badge { font-family: var(--bs-body-font-family, inherit); }
+
+/* Popover */
+.tr-pop {
+  position: absolute;
+  z-index: 1050;
+  width: min(32rem, calc(100vw - 32px));
+  background: var(--tr-pop-bg);
+  color: var(--tr-text);
+  border: 1px solid var(--tr-border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.tr-pop.tr-pop-code { width: min(46rem, calc(100vw - 32px)); }
+.tr-pop.tr-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  max-height: 75vh;
+  overflow: auto;
+  border-radius: 12px 12px 0 0;
+}
+.tr-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--tr-border);
+}
+.tr-pop-status { font-weight: 600; font-size: 0.82rem; }
+.tr-status-stale, .tr-status-missing { color: var(--tr-stale); }
+.tr-status-reviewed { color: var(--tr-reviewed); }
+.tr-x {
+  border: 0;
+  background: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--tr-muted);
+  padding: 0 0.25rem;
+}
+.tr-pop-body { padding: 0.5rem 0.75rem 0.25rem; }
+.tr-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tr-muted);
+  margin-top: 0.4rem;
+}
+.tr-pop blockquote {
+  margin: 0.2rem 0 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border-left: 3px solid var(--tr-border);
+  background: var(--tr-bg);
+  font-size: 0.88rem;
+  color: var(--tr-text);
+}
+.tr-previous { opacity: 0.8; }
+.tr-reviewers, .tr-reason, .tr-mine { margin: 0.35rem 0; font-size: 0.82rem; color: var(--tr-muted); }
+.tr-reason { color: var(--tr-stale); }
+.tr-mine { color: var(--tr-pending); }
+.tr-pop pre.tr-code {
+  margin: 0.2rem 0 0.4rem;
+  padding: 0.4rem 0.6rem;
+  max-height: 14rem;
+  overflow: auto;
+  background: var(--tr-bg);
+  border-left: 3px solid var(--tr-border);
+  font-size: 0.8rem;
+  white-space: pre;
+}
+textarea.tr-code { font-family: var(--bs-font-monospace, monospace); font-size: 0.8rem; white-space: pre; }
+.tr-actions, .tr-editor { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.5rem 0.75rem 0.75rem; }
+.tr-editor { flex-direction: column; align-items: stretch; }
+.tr-editor .tr-actions { padding: 0; }
+.tr-edit-gh { margin-left: auto; font-size: 0.8rem; }
+
+/* Tray */
+.tr-tray {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1060;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: min(36rem, calc(100vw - 32px));
+  padding: 0.6rem 0.8rem;
+  background: var(--tr-pop-bg);
+  color: var(--tr-text);
+  border: 1px solid var(--tr-border);
+  border-left: 4px solid var(--tr-pending);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  font-size: 0.88rem;
+}
+.tr-tray-count { font-weight: 600; }
+.tr-tray-pages { flex-basis: 100%; }
+.tr-tray-pages summary { cursor: pointer; }
+.tr-tray-pages ul { margin: 0.35rem 0 0; padding-left: 1.1rem; font-size: 0.82rem; max-height: 40vh; overflow: auto; }
+.tr-tray-pages li { overflow-wrap: anywhere; }
+.tr-login { display: flex; gap: 0.4rem; align-items: end; }
+.tr-login label { display: grid; gap: 0.2rem; font-size: 0.8rem; }
+.tr-error { color: #b91c1c; margin: 0; flex-basis: 100%; }
+.tr-result p { margin: 0.25rem 0 0; font-size: 0.82rem; }
+
+/* Language switcher (also styled inline by the build for source pages) */
+.tr-switcher { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; font-size: 0.875rem; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .tr-pop { animation: tr-in 120ms ease-out; }
+  @keyframes tr-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+}
+
+/* Changes the service did not accept: kept, with the reason */
+.tr-tray-held { flex-basis: 100%; border-top: 1px solid var(--tr-border); padding-top: 0.4rem; }
+.tr-tray-held summary { cursor: pointer; font-weight: 600; color: var(--tr-stale); }
+.tr-tray-held ul { margin: 0.35rem 0; padding-left: 1.1rem; font-size: 0.82rem; max-height: 35vh; overflow: auto; }
+.tr-tray-held li { overflow-wrap: anywhere; margin-bottom: 0.3rem; }
+.tr-held-reason { color: var(--tr-muted); font-size: 0.78rem; }
+.tr-held-text { margin: 0.2rem 0 0; padding: 0.25rem 0.4rem; max-height: 6rem; overflow: auto; background: var(--tr-bg); font-size: 0.75rem; white-space: pre-wrap; }
+.tr-held-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.tr-held-note { color: var(--tr-stale); }
+.tr-result { flex-basis: 100%; }
+
+/* Pending suggestion shown in place, as a diff against the current translation. */
+body.tr-review-on .tr-edited del { background: color-mix(in srgb, #dc2626 16%, transparent); text-decoration: line-through; }
+body.tr-review-on .tr-edited ins { background: color-mix(in srgb, var(--tr-pending) 18%, transparent); text-decoration: none; }

@@ -1,0 +1,22 @@
+{
+  "name": "quarto-i18n",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Managed LLM translations for Quarto projects (development repo)",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "i18n": "node src/cli/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "^0.25.12",
+    "typescript": "^5.9.3",
+    "yaml": "^2.9.1"
+  }
+}

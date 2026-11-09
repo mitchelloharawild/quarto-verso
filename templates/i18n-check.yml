@@ -1,0 +1,34 @@
+# Copy to .github/workflows/ in the site repository. Checks contribution PRs to
+# translation files: runs without secrets, with a read-only token, never calls
+# an LLM and never renders the contribution. If the Quarto project is not at
+# the repository root, prefix the path filter and pass --project <dir>.
+name: i18n check
+
+on:
+  pull_request:
+    paths:
+      - "_i18n/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: 1.10.18
+      - name: Check the contribution
+        run: >
+          node _extensions/quarto-i18n/i18n.mjs check
+          --base "origin/${{ github.base_ref }}" --head HEAD
+          --author "${{ github.event.pull_request.user.login }}"
+          --branch "${{ github.head_ref }}"
