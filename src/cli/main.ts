@@ -33,7 +33,7 @@ Commands
     --reset            also rewrite documents whose structure no longer matches
 
 Options
-  --lang fr,es         languages (default: verso-translate.targets; env QUARTO_I18N_LANGUAGES)
+  --lang fr,es         languages (default: verso-translate.targets; env VERSO_TRANSLATE_LANGUAGES)
   --project <dir>      project directory (default: nearest _quarto.yml)
 `;
 
@@ -71,7 +71,7 @@ async function main(): Promise<number> {
     case 'hook': {
       const mode = renderMode();
       const langs = p.languages(lang);
-      if (!mode.full && !process.env.QUARTO_I18N_LANGUAGES) {
+      if (!mode.full && !process.env.VERSO_TRANSLATE_LANGUAGES) {
         // Keep existing language builds; refresh the switcher on re-rendered source pages.
         const outs = (process.env.QUARTO_PROJECT_OUTPUT_FILES ?? '').split('\n').filter(Boolean)
           .map((f) => path.relative(p.outputDir, path.resolve(root, f)).split(path.sep).join('/'));
@@ -148,7 +148,7 @@ main().then(
   (code) => process.exit(code),
   (e) => {
     console.error(`[i18n] error: ${e instanceof Error ? e.message : e}`);
-    if (process.env.QUARTO_I18N_DEBUG) console.error(e);
+    if (process.env.VERSO_TRANSLATE_DEBUG) console.error(e);
     process.exit(1);
   },
 );

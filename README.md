@@ -62,8 +62,20 @@ project:` in `_extension.yml`), so installing it is the whole setup. Quarto
 resolves the hook script, `hook.ts`, against the extension's folder and runs it
 with its bundled Deno; the script runs `i18n.mjs hook` with Node. A full
 `quarto render` then builds every language; preview and single-file renders
-build the source only. The hook does nothing in projects without a
+build the source only. Set `VERSO_TRANSLATE_LANGUAGES` to limit a render to some
+languages (`fr,es`) or to none (`none`). The hook does nothing in projects without a
 `verso-translate:` block. (The earlier `type: quarto-i18n` is still read as a book.)
+
+### Leaving content untranslated
+
+Every option the extension reads sits under the `verso-translate` key:
+
+| Where | Option |
+|-------|--------|
+| A whole document (front matter) | `verso-translate: false` |
+| A section, div or heading | `{verso-translate=false}`, e.g. `::: {verso-translate=false}` |
+| A span inside a paragraph | `[Name]{verso-translate=false}` (kept verbatim) |
+| An executable cell's captions | `#| verso-translate: false` |
 
 ## Development
 

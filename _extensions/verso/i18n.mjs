@@ -7391,7 +7391,7 @@ function quartoBin() {
   return which("quarto") ?? "quarto";
 }
 function pandocCommand() {
-  if (process.env.QUARTO_I18N_PANDOC) return { cmd: process.env.QUARTO_I18N_PANDOC, args: [] };
+  if (process.env.VERSO_TRANSLATE_PANDOC) return { cmd: process.env.VERSO_TRANSLATE_PANDOC, args: [] };
   const q = quartoBin();
   try {
     const real = fs.realpathSync(q);
@@ -7631,8 +7631,8 @@ function translatedUnit(u, text, origin, terms) {
 
 // src/core/protect.ts
 var PATTERNS = [
-  /\[[^\]\n]*\]\{[^}\n]*\btranslate\s*=\s*"?false"?[^}\n]*\}/y,
-  // [text]{translate=false}
+  /\[[^\]\n]*\]\{[^}\n]*\bverso-translate\s*=\s*"?false"?[^}\n]*\}/y,
+  // [text]{verso-translate=false}
   /(`+)(?:(?!\1)[\s\S])+?\1(?!`)/y,
   // inline code
   /\$\$[\s\S]+?\$\$/y,
@@ -8639,7 +8639,7 @@ async function extractUnits(text, md) {
   const issues = [];
   const fm = frontMatter(text);
   if (fm && fm.data && typeof fm.data === "object") {
-    if (fm.data.translate === false) return { units: [], issues };
+    if (fm.data["verso-translate"] === false) return { units: [], issues };
     for (const f of META_FIELDS) {
       const v = fm.data[f];
       if (typeof v === "string" && hasTranslatableText(v)) {
@@ -8681,7 +8681,7 @@ async function extractUnits(text, md) {
       switch (b.t) {
         case "Div": {
           const attr = b.c[0];
-          if (kv(attr, "translate") === "false") break;
+          if (kv(attr, "verso-translate") === "false") break;
           const callout = attr[1].some((c) => c.startsWith("callout"));
           walk(b.c[1], inCallout || callout);
           break;
@@ -8692,7 +8692,7 @@ async function extractUnits(text, md) {
           break;
         case "Header": {
           const [level, attr, inl] = b.c;
-          if (kv(attr, "translate") === "false") break;
+          if (kv(attr, "verso-translate") === "false") break;
           const p = kv(attr, "data-pos");
           const line = p ? parseDataPos(p)[0]?.l1 : void 0;
           const explicit = line !== void 0 && /\{[^}]*#[\w:.-]+[^}]*\}\s*$/.test(pos.line(line));
@@ -8770,7 +8770,7 @@ async function extractUnits(text, md) {
       issues.push({ level: "error", line: fenceLine, message: "executable cell without a label: add #| label: \u2026" });
       return;
     }
-    const tr = opts.translate?.value;
+    const tr = opts["verso-translate"]?.value;
     if (tr === false) return;
     for (const name of CAPTION_OPTIONS) {
       const o = opts[name];
@@ -9089,7 +9089,7 @@ var Project = class {
     return this.tc.review?.target ?? 2;
   }
   languages(filter) {
-    const env = process.env.QUARTO_I18N_LANGUAGES;
+    const env = process.env.VERSO_TRANSLATE_LANGUAGES;
     const want = filter ?? (env && env !== "all" ? env : void 0);
     if (want === "none") return [];
     const all = this.tc.targets.map(String);
@@ -9380,7 +9380,7 @@ async function buildLanguage(p, lang, log2) {
     const first = materialise(text, st.synced, opts);
     const stats = pageStats(first.units, p.reviewTarget);
     const minCoverage = p.tc["min-coverage"] ?? 0.5;
-    const extra = { i18n: { lang, notice: true } };
+    const extra = { "verso-translate": { lang, notice: true } };
     if (stats.translated < minCoverage) extra["include-in-header"] = [{ text: '<meta name="robots" content="noindex">' }];
     const m = materialise(text, st.synced, { ...opts, meta: extra });
     if (!structureFallback.has(st.file)) {
@@ -10133,7 +10133,7 @@ Commands
     --reset            also rewrite documents whose structure no longer matches
 
 Options
-  --lang fr,es         languages (default: verso-translate.targets; env QUARTO_I18N_LANGUAGES)
+  --lang fr,es         languages (default: verso-translate.targets; env VERSO_TRANSLATE_LANGUAGES)
   --project <dir>      project directory (default: nearest _quarto.yml)
 `;
 function parseArgs(argv) {
@@ -10165,7 +10165,7 @@ async function main() {
     case "hook": {
       const mode = renderMode();
       const langs = p.languages(lang);
-      if (!mode.full && !process.env.QUARTO_I18N_LANGUAGES) {
+      if (!mode.full && !process.env.VERSO_TRANSLATE_LANGUAGES) {
         const outs = (process.env.QUARTO_PROJECT_OUTPUT_FILES ?? "").split("\n").filter(Boolean).map((f) => path7.relative(p.outputDir, path7.resolve(root, f)).split(path7.sep).join("/"));
         if (outs.length) postProcess(p, outs);
         log("")(`${mode.reason}: language builds skipped (full \`quarto render\` or \`i18n build\` builds them)`);
@@ -10241,7 +10241,7 @@ main().then(
   (code) => process.exit(code),
   (e) => {
     console.error(`[i18n] error: ${e instanceof Error ? e.message : e}`);
-    if (process.env.QUARTO_I18N_DEBUG) console.error(e);
+    if (process.env.VERSO_TRANSLATE_DEBUG) console.error(e);
     process.exit(1);
   }
 );

@@ -162,7 +162,7 @@ export async function buildLanguage(p: Project, lang: string, log: Log): Promise
     const stats = pageStats(first.units, p.reviewTarget);
     // Thin pages (mostly source-language fallback) are published with noindex.
     const minCoverage = p.tc['min-coverage'] ?? 0.5;
-    const extra: Record<string, unknown> = { i18n: { lang, notice: true } };
+    const extra: Record<string, unknown> = { 'verso-translate': { lang, notice: true } };
     if (stats.translated < minCoverage) extra['include-in-header'] = [{ text: '<meta name="robots" content="noindex">' }];
     const m = materialise(text, st.synced, { ...opts, meta: extra });
     // Structure check: same block structure as the source.

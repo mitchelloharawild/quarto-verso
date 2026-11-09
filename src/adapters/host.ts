@@ -29,7 +29,7 @@ export function quartoBin(): string {
 
 /** Pandoc bundled with Quarto, called directly for speed; `quarto pandoc` as fallback. */
 export function pandocCommand(): { cmd: string; args: string[] } {
-  if (process.env.QUARTO_I18N_PANDOC) return { cmd: process.env.QUARTO_I18N_PANDOC, args: [] };
+  if (process.env.VERSO_TRANSLATE_PANDOC) return { cmd: process.env.VERSO_TRANSLATE_PANDOC, args: [] };
   const q = quartoBin();
   try {
     const real = fs.realpathSync(q);
@@ -63,7 +63,7 @@ export function renderMode(): { full: boolean; preview: boolean; reason: string 
 }
 
 function underPreview(): boolean {
-  if (process.platform === 'win32') return false; // untested; use QUARTO_I18N_LANGUAGES
+  if (process.platform === 'win32') return false; // untested; use VERSO_TRANSLATE_LANGUAGES
   try {
     let pid = process.ppid;
     for (let i = 0; i < 6 && pid > 1; i++) {

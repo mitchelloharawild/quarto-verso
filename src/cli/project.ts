@@ -90,7 +90,7 @@ export class Project {
   }
 
   languages(filter?: string): string[] {
-    const env = process.env.QUARTO_I18N_LANGUAGES;
+    const env = process.env.VERSO_TRANSLATE_LANGUAGES;
     const want = filter ?? (env && env !== 'all' ? env : undefined);
     if (want === 'none') return [];
     const all = this.tc.targets.map(String);

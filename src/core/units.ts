@@ -114,7 +114,7 @@ export async function extractUnits(text: string, md: MarkdownAdapter): Promise<E
   // Front matter fields.
   const fm = frontMatter(text);
   if (fm && fm.data && typeof fm.data === 'object') {
-    if (fm.data.translate === false) return { units: [], issues };
+    if (fm.data['verso-translate'] === false) return { units: [], issues };
     for (const f of META_FIELDS) {
       const v = fm.data[f];
       if (typeof v === 'string' && hasTranslatableText(v)) {
@@ -160,7 +160,7 @@ export async function extractUnits(text: string, md: MarkdownAdapter): Promise<E
       switch (b.t) {
         case 'Div': {
           const attr = b.c[0];
-          if (kv(attr, 'translate') === 'false') break;
+          if (kv(attr, 'verso-translate') === 'false') break;
           const callout = (attr[1] as string[]).some((c) => c.startsWith('callout'));
           walk(b.c[1], inCallout || callout);
           break;
@@ -171,7 +171,7 @@ export async function extractUnits(text: string, md: MarkdownAdapter): Promise<E
           break;
         case 'Header': {
           const [level, attr, inl] = b.c;
-          if (kv(attr, 'translate') === 'false') break;
+          if (kv(attr, 'verso-translate') === 'false') break;
           const p = kv(attr, 'data-pos');
           const line = p ? parseDataPos(p)[0]?.l1 : undefined;
           const explicit = line !== undefined && /\{[^}]*#[\w:.-]+[^}]*\}\s*$/.test(pos.line(line));
@@ -250,7 +250,7 @@ export async function extractUnits(text: string, md: MarkdownAdapter): Promise<E
       issues.push({ level: 'error', line: fenceLine, message: 'executable cell without a label: add #| label: …' });
       return;
     }
-    const tr = opts.translate?.value;
+    const tr = opts['verso-translate']?.value;
     if (tr === false) return;
     for (const name of CAPTION_OPTIONS) {
       const o = opts[name];

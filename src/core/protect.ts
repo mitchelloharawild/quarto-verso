@@ -3,10 +3,10 @@
 // Everything that is code, an identifier or a target is protected: inline code
 // (including `{r} expr`), math, shortcodes, raw HTML, link and image targets,
 // attribute blocks, citations and cross-references, footnote references, and
-// spans marked translate=false. Only the text between them may change.
+// spans marked verso-translate=false. Only the text between them may change.
 
 const PATTERNS: RegExp[] = [
-  /\[[^\]\n]*\]\{[^}\n]*\btranslate\s*=\s*"?false"?[^}\n]*\}/y, // [text]{translate=false}
+  /\[[^\]\n]*\]\{[^}\n]*\bverso-translate\s*=\s*"?false"?[^}\n]*\}/y, // [text]{verso-translate=false}
   /(`+)(?:(?!\1)[\s\S])+?\1(?!`)/y, // inline code
   /\$\$[\s\S]+?\$\$/y, // display math
   /\$(?=\S)[^$\n]*?\S\$(?!\d)/y, // inline math

@@ -6,6 +6,7 @@ import { pandocMarkdown } from '../src/adapters/markdown.ts';
 import { applyOps, checkContribution } from '../src/core/contrib.ts';
 import { parseTrack, readDoc, stringifyTrack, withPolicy, writeDoc } from '../src/core/tdoc.ts';
 import { displayStatus, syncUnits, toTFile, translatedUnit } from '../src/core/sync.ts';
+import { protectedTokens } from '../src/core/protect.ts';
 import { extractUnits } from '../src/core/units.ts';
 import type { TFile } from '../src/core/types.ts';
 
@@ -156,4 +157,34 @@ test('documents: contribution checks on a translated document and its tracking f
   const w2 = writeDoc('a.qmd', DOC, units, e2.tfile, r0.raw);
   assert.match(failed(await run(new Map([[D, w2.doc], [T, stringifyTrack(w2.track, 'a.qmd')]]))).join(), /^6: /);
   void t;
+});
+
+test('opt-outs: verso-translate: false skips a document, a block, a heading, a cell and protects a span', async () => {
+  const off = await extractUnits('---\ntitle: "T"\nverso-translate: false\n---\n\nText.\n', md);
+  assert.equal(off.units.length, 0);
+  const src = [
+    '# Kept heading',
+    '',
+    '# Skipped heading {verso-translate=false}',
+    '',
+    '::: {verso-translate=false}',
+    'Skipped paragraph.',
+    ':::',
+    '',
+    'Kept with [Name]{verso-translate=false} inside.',
+    '',
+    '```{r}',
+    '#| label: fig-a',
+    '#| fig-cap: "Skipped caption."',
+    '#| verso-translate: false',
+    'plot(1)',
+    '```',
+    '',
+  ].join('\n');
+  const { units } = await extractUnits(src, md);
+  const texts = units.map((u) => u.source);
+  assert.ok(texts.includes('Kept heading'));
+  assert.ok(texts.some((t) => t.startsWith('Kept with')));
+  for (const t of texts) assert.doesNotMatch(t, /Skipped/);
+  assert.deepEqual(protectedTokens('Kept with [Name]{verso-translate=false} inside.'), ['[Name]{verso-translate=false}']);
 });

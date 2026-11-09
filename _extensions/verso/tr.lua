@@ -45,7 +45,7 @@ local function header(el)
 end
 
 local function notice(doc)
-  local i18n = doc.meta.i18n
+  local i18n = doc.meta["verso-translate"]
   if not i18n or not i18n.notice then return nil end
   -- A placeholder: the build replaces it with the translation banner.
   local div = pandoc.RawBlock("html", '<div class="tr-notice"></div>')
