@@ -30,6 +30,10 @@ export interface UiStrings {
   clearAll: string;
   clearAllConfirm: string;
   signIn: string;
+  signInWhy: string;
+  signedInAs: string;
+  signOut: string;
+  signInDenied: string;
   status_missing: string;
   status_stale: string;
   status_machine: string;
@@ -76,7 +80,11 @@ const en: UiStrings = {
   clearPage: 'Discard this page',
   clearAll: 'Discard all',
   clearAllConfirm: 'Discard all {n} pending changes on {p} pages?',
-  signIn: 'GitHub username (mock sign-in)',
+  signIn: 'Sign in with GitHub',
+  signInWhy: 'Your review is proposed as a pull request under your GitHub account.',
+  signedInAs: 'Signed in as {login}',
+  signOut: 'Sign out',
+  signInDenied: 'GitHub sign-in was cancelled.',
   status_missing: 'Not translated: original text shown',
   status_stale: 'Original changed: original text shown',
   status_machine: 'Machine translation, not reviewed',
@@ -123,7 +131,11 @@ const fr: UiStrings = {
   clearPage: 'Abandonner cette page',
   clearAll: 'Tout abandonner',
   clearAllConfirm: 'Abandonner les {n} modifications en attente sur {p} pages ?',
-  signIn: 'Nom d’utilisateur GitHub (connexion simulée)',
+  signIn: 'Se connecter avec GitHub',
+  signInWhy: 'Votre relecture est proposée en pull request depuis votre compte GitHub.',
+  signedInAs: 'Connecté en tant que {login}',
+  signOut: 'Se déconnecter',
+  signInDenied: 'La connexion à GitHub a été annulée.',
   status_missing: 'Non traduit : texte original affiché',
   status_stale: 'Original modifié : texte original affiché',
   status_machine: 'Traduction automatique, non relue',
@@ -170,7 +182,11 @@ const es: UiStrings = {
   clearPage: 'Descartar esta página',
   clearAll: 'Descartar todo',
   clearAllConfirm: '¿Descartar los {n} cambios pendientes en {p} páginas?',
-  signIn: 'Usuario de GitHub (inicio de sesión simulado)',
+  signIn: 'Iniciar sesión con GitHub',
+  signInWhy: 'Tu revisión se propone como pull request desde tu cuenta de GitHub.',
+  signedInAs: 'Sesión iniciada como {login}',
+  signOut: 'Cerrar sesión',
+  signInDenied: 'Se canceló el inicio de sesión con GitHub.',
   status_missing: 'Sin traducir: se muestra el original',
   status_stale: 'El original cambió: se muestra el original',
   status_machine: 'Traducción automática, sin revisar',

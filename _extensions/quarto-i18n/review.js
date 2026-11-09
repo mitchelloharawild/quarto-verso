@@ -543,6 +543,12 @@
     var submit = el("button", { type: "button", class: "btn btn-sm btn-primary", onclick: submitAll }, [S.submit]);
     if (!data.service) submit.disabled = true;
     tray.appendChild(submit);
+    var who = signedInLine();
+    if (who) tray.appendChild(who);
+    if (signInError) {
+      tray.appendChild(el("p", { class: "tr-error", role: "alert" }, [S.signInDenied]));
+      signInError = null;
+    }
     if (pages.length > 1 && here) {
       tray.appendChild(el("button", { type: "button", class: "btn btn-sm btn-link", onclick: function () {
         setPendingAll(pendingAll().filter(function (p) { return !(onThisPage(p) && isActive(p)); }));
@@ -554,21 +560,58 @@
     } }, [pages.length > 1 ? S.clearAll : S.clear]));
   }
 
+  // ---- GitHub sign-in (like giscus) -----------------------------------------------
+  // The service sends the reader back with #verso-session=…&verso-login=… (a
+  // fragment never reaches a server). The sealed session is all the page keeps.
+  var signInError = null;
+
+  function takeSessionFromUrl() {
+    var h = window.location.hash;
+    if (!/^#verso-(session|error)=/.test(h)) return;
+    var q = new URLSearchParams(h.slice(1));
+    if (q.get("verso-session")) {
+      save("session", q.get("verso-session"));
+      save("login", q.get("verso-login"));
+    } else signInError = "denied";
+    try {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    } catch (e) {
+      window.location.hash = "";
+    }
+  }
+
+  function serviceUrl(route) {
+    var q = "repo=" + encodeURIComponent(data.repo || "") + "&dir=" + encodeURIComponent(data.dir || "");
+    return data.service.replace(/\/$/, "") + route + "?" + q;
+  }
+
+  function signInHref() {
+    return serviceUrl("/auth/login") + "&return=" + encodeURIComponent(window.location.href.split("#")[0]);
+  }
+
+  function signOut() {
+    save("session", null);
+    save("login", null);
+    renderTray();
+  }
+
+  function signedInLine() {
+    var me = load("login", null);
+    if (!me || !load("session", null)) return null;
+    return el("span", { class: "tr-signed-in" }, [
+      fill(S.signedInAs, { login: "@" + me }) + " · ",
+      el("button", { type: "button", class: "btn btn-sm btn-link p-0 align-baseline", onclick: signOut }, [S.signOut]),
+    ]);
+  }
+
   function ensureLogin(cb) {
     var me = load("login", null);
-    if (me) return cb(me);
+    if (me && load("session", null)) return cb(me);
     tray.innerHTML = "";
-    var input = el("input", { type: "text", class: "form-control form-control-sm", placeholder: "octocat", "aria-label": S.signIn, autocomplete: "username" });
-    var form = el("form", { class: "tr-login" }, [el("label", {}, [S.signIn, input]), el("button", { type: "submit", class: "btn btn-sm btn-primary" }, ["OK"])]);
-    form.addEventListener("submit", function (ev) {
-      ev.preventDefault();
-      var v = input.value.trim().replace(/^@/, "");
-      if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(v)) return input.focus();
-      save("login", v);
-      cb(v);
-    });
-    tray.appendChild(form);
-    input.focus();
+    tray.appendChild(el("div", { class: "tr-login" }, [
+      el("a", { class: "btn btn-sm btn-dark", href: signInHref() }, [S.signIn]),
+      el("small", { class: "tr-login-why" }, [" " + S.signInWhy]),
+    ]));
   }
 
   var submitting = false;
@@ -584,9 +627,9 @@
       resultBox = null;
       tray.innerHTML = "";
       tray.appendChild(el("span", {}, ["…"]));
-      fetch(data.service.replace(/\/$/, "") + "/api/submit", {
+      fetch(serviceUrl("/api/submit"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-I18n-User": login },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + load("session", "") },
         body: JSON.stringify({
           repo: data.repo, lang: data.lang,
           ops: sent.map(function (p) { return { op: p.op, id: p.id, text: p.text, hash: p.hash, file: p.file }; }),
@@ -598,6 +641,12 @@
         .then(function (res) {
           submitting = false;
           var b = res.body;
+          if (b.session) save("session", b.session); // the service renewed the GitHub token
+          if (res.status === 401 && b.signin) {
+            // Signed out on GitHub's side (expired or revoked): sign in again; nothing is lost.
+            save("session", null);
+            return ensureLogin(function () {});
+          }
           var reported = b.applied || b.dropped || b.rejected;
           if (reported) reconcile(sent, b);
           if (res.ok && b.pr) return showResult(b);
@@ -688,6 +737,7 @@
     // The script loads in <head>; the review-data pointer is read once the page is parsed.
     var meta = document.querySelector('meta[name="i18n-review-data"]');
     if (!meta) return;
+    takeSessionFromUrl();
     DATA_URL = meta.getAttribute("content");
     toggleLinks();
     if (reviewRequested()) start();

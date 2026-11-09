@@ -266,3 +266,7 @@ textarea.tr-code { font-family: var(--bs-font-monospace, monospace); font-size: 
 /* Pending suggestion shown in place, as a diff against the current translation. */
 body.tr-review-on .tr-edited del { background: color-mix(in srgb, #dc2626 16%, transparent); text-decoration: line-through; }
 body.tr-review-on .tr-edited ins { background: color-mix(in srgb, var(--tr-pending) 18%, transparent); text-decoration: none; }
+
+.tr-login { align-items: center; flex-wrap: wrap; }
+.tr-login-why { color: var(--tr-muted, #64748b); font-size: 0.8rem; }
+.tr-signed-in { font-size: 0.8rem; color: var(--tr-muted, #64748b); }
