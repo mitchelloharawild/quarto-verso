@@ -43,8 +43,18 @@ tracking file `_i18n/<lang>/<file>.qmd.yml` with unit ids, hashes, origins and
 reviews (no text). The project's own strings (`_quarto.yml`) are translated in
 `_i18n/<lang>/_project.yml`.
 
-A full `quarto render` builds every language through the project type's
-`post-render` hook; preview and single-file renders build the source only.
+The project keeps its own Quarto type (book, website, manuscript, ...). The only
+additions to `_quarto.yml` are the `translate:` block and one hook:
+
+```yaml
+project:
+  type: book
+  post-render: node _extensions/quarto-i18n/i18n.mjs hook
+```
+
+A full `quarto render` then builds every language through that hook; preview
+and single-file renders build the source only. (The earlier `type: quarto-i18n`
+is still read as a book.)
 
 ## Development
 

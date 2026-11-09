@@ -23,6 +23,9 @@ export function extensionDir(): string {
 }
 
 export const PROJECT_FILE = '_quarto.yml';
+
+/** Quarto's default output directory per project type. */
+const DEFAULT_OUTPUT: Record<string, string> = { book: '_book', website: '_site', manuscript: '_manuscript' };
 export const PROJECT_TFILE = '_project.yml';
 
 export interface FileState {
@@ -59,12 +62,21 @@ export class Project {
     this.md = pandocMarkdown();
   }
 
-  get type(): 'book' | 'website' {
-    return this.config.book ? 'book' : 'website';
+  /**
+   * The Quarto project type (book, website, manuscript, default, ...). The
+   * extension adds no type of its own; the legacy `quarto-i18n` type was a book.
+   */
+  get type(): string {
+    const t = this.config.project?.type;
+    if (typeof t === 'string' && t !== 'quarto-i18n') return t;
+    if (this.config.book || t === 'quarto-i18n') return 'book';
+    return this.config.website ? 'website' : 'default';
   }
 
   get outputDir(): string {
-    return path.join(this.root, this.config.project?.['output-dir'] ?? (this.type === 'book' ? '_book' : '_site'));
+    const out = this.config.project?.['output-dir'] ?? DEFAULT_OUTPUT[this.type];
+    if (!out) throw new Error(`${PROJECT_FILE}: set project.output-dir (project type '${this.type}' has no default output directory)`);
+    return path.join(this.root, out);
   }
 
   get i18nDir(): string {

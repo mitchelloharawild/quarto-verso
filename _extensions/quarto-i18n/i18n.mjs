@@ -9045,6 +9045,7 @@ function extensionDir() {
   throw new Error("cannot locate the quarto-i18n extension directory");
 }
 var PROJECT_FILE = "_quarto.yml";
+var DEFAULT_OUTPUT = { book: "_book", website: "_site", manuscript: "_manuscript" };
 var PROJECT_TFILE = "_project.yml";
 var Project = class {
   root;
@@ -9065,11 +9066,20 @@ var Project = class {
     this.extDir = extensionDir();
     this.md = pandocMarkdown();
   }
+  /**
+   * The Quarto project type (book, website, manuscript, default, ...). The
+   * extension adds no type of its own; the legacy `quarto-i18n` type was a book.
+   */
   get type() {
-    return this.config.book ? "book" : "website";
+    const t = this.config.project?.type;
+    if (typeof t === "string" && t !== "quarto-i18n") return t;
+    if (this.config.book || t === "quarto-i18n") return "book";
+    return this.config.website ? "website" : "default";
   }
   get outputDir() {
-    return path2.join(this.root, this.config.project?.["output-dir"] ?? (this.type === "book" ? "_book" : "_site"));
+    const out = this.config.project?.["output-dir"] ?? DEFAULT_OUTPUT[this.type];
+    if (!out) throw new Error(`${PROJECT_FILE}: set project.output-dir (project type '${this.type}' has no default output directory)`);
+    return path2.join(this.root, out);
   }
   get i18nDir() {
     return path2.join(this.root, "_i18n");
