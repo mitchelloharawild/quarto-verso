@@ -7392,6 +7392,10 @@ function quartoBin() {
 }
 function pandocCommand() {
   const q = quartoBin();
+  if (q === "quarto") {
+    const pd = which("pandoc");
+    if (pd) return { cmd: pd, args: [] };
+  }
   try {
     const real = fs.realpathSync(q);
     const p = path.join(path.dirname(real), "tools", process.platform === "win32" ? "pandoc.exe" : "pandoc");
@@ -9052,7 +9056,6 @@ var Project = class {
   config;
   tc;
   md;
-  extDir;
   unitCache = /* @__PURE__ */ new Map();
   historyCache = /* @__PURE__ */ new Map();
   constructor(root) {
@@ -9063,8 +9066,11 @@ var Project = class {
     const tc = this.config[CONFIG_KEY];
     if (!tc || !tc.source || !Array.isArray(tc.targets)) throw new Error(`${PROJECT_FILE}: ${CONFIG_KEY}.source and ${CONFIG_KEY}.targets are required`);
     this.tc = tc;
-    this.extDir = extensionDir();
     this.md = pandocMarkdown();
+  }
+  /** The installed extension (needed to build; the PR service never asks). */
+  get extDir() {
+    return extensionDir();
   }
   /**
    * The Quarto project type (book, website, manuscript, default, ...). The

@@ -48,7 +48,6 @@ export class Project {
   readonly config: any;
   readonly tc: TranslateConfig;
   readonly md: MarkdownAdapter;
-  readonly extDir: string;
   private unitCache = new Map<string, { units: SourceUnit[]; issues: Issue[] }>();
   private historyCache = new Map<string, Map<string, string>>();
 
@@ -60,8 +59,12 @@ export class Project {
     const tc = this.config[CONFIG_KEY];
     if (!tc || !tc.source || !Array.isArray(tc.targets)) throw new Error(`${PROJECT_FILE}: ${CONFIG_KEY}.source and ${CONFIG_KEY}.targets are required`);
     this.tc = tc;
-    this.extDir = extensionDir();
     this.md = pandocMarkdown();
+  }
+
+  /** The installed extension (needed to build; the PR service never asks). */
+  get extDir(): string {
+    return extensionDir();
   }
 
   /**

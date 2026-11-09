@@ -1,0 +1,8 @@
+*
+!package.json
+!package-lock.json
+!scripts/
+!src/
+!service/
+service/.cache/
+service/dist/

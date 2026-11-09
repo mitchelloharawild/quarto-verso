@@ -7,13 +7,19 @@
 //
 // Configuration (environment, or the --env file):
 //   VERSO_APP_ID, VERSO_CLIENT_ID, VERSO_CLIENT_SECRET   verso-i18n
-//   VERSO_PRIVATE_KEY_FILE          default ~/.config/verso/verso-i18n.pem
+//   VERSO_PRIVATE_KEY               PEM, or VERSO_PRIVATE_KEY_FILE
+//                                   (default ~/.config/verso/verso-i18n.pem)
 //   VERSO_WRITER_APP_ID             verso-i18n-writer
-//   VERSO_WRITER_PRIVATE_KEY_FILE   default ~/.config/verso/verso-i18n-writer.pem
+//   VERSO_WRITER_PRIVATE_KEY        PEM, or VERSO_WRITER_PRIVATE_KEY_FILE
+//                                   (default ~/.config/verso/verso-i18n-writer.pem)
 //   VERSO_SESSION_KEY               32 bytes, base64
 //   VERSO_FORK_OWNER                organisation that owns the forks
+//   VERSO_PUBLIC_URL                public address (the OAuth callback is <url>/auth/callback)
+//   VERSO_CACHE                     repository snapshots (default service/.cache)
+//   PORT                            default 8787
 //
 // Routes:
+//   GET  /healthz                         liveness (no GitHub calls)
 //   GET  /auth/login?repo=&dir=&return=   start "Sign in with GitHub"
 //   GET  /auth/callback                   GitHub returns here; back to the page
 //                                         with #verso-session=…&verso-login=…
@@ -60,9 +66,11 @@ const STATIC = opt('static') ? path.resolve(home(opt('static')!)) : undefined;
 const CACHE = path.resolve(home(opt('cache', process.env.VERSO_CACHE ?? path.join(path.dirname(new URL(import.meta.url).pathname), '.cache'))!));
 
 const oauth = { clientId: need('VERSO_CLIENT_ID'), clientSecret: need('VERSO_CLIENT_SECRET') };
-const readKey = (k: string, d: string) => fs.readFileSync(home(process.env[k] ?? d), 'utf8');
-const reader = new Installations({ appId: need('VERSO_APP_ID'), privateKey: readKey('VERSO_PRIVATE_KEY_FILE', '~/.config/verso/verso-i18n.pem') });
-const writer = new Installations({ appId: need('VERSO_WRITER_APP_ID'), privateKey: readKey('VERSO_WRITER_PRIVATE_KEY_FILE', '~/.config/verso/verso-i18n-writer.pem') });
+/** A private key from `<k>` (PEM; `\n` escapes allowed) or the file named by `<k>_FILE`. */
+const readKey = (k: string, d: string) =>
+  process.env[k]?.replace(/\\n/g, '\n') ?? fs.readFileSync(home(process.env[`${k}_FILE`] ?? d), 'utf8');
+const reader = new Installations({ appId: need('VERSO_APP_ID'), privateKey: readKey('VERSO_PRIVATE_KEY', '~/.config/verso/verso-i18n.pem') });
+const writer = new Installations({ appId: need('VERSO_WRITER_APP_ID'), privateKey: readKey('VERSO_WRITER_PRIVATE_KEY', '~/.config/verso/verso-i18n-writer.pem') });
 const sealer = new Sealer(need('VERSO_SESSION_KEY'));
 const FORK_OWNER = need('VERSO_FORK_OWNER');
 const sites = new Sites(CACHE, reader);
@@ -222,6 +230,7 @@ const server = http.createServer(async (req, res) => {
       // Preflight grants nothing by itself; the POST checks the site's origin list.
       return send(res, 204, '', 'text/plain', req.headers.origin ? corsFor(String(req.headers.origin)) : {});
     }
+    if (url.pathname === '/healthz' && req.method === 'GET') return send(res, 200, 'ok', 'text/plain');
     if (url.pathname === '/auth/login' && req.method === 'GET') return await login(url, res);
     if (url.pathname === '/auth/callback' && req.method === 'GET') return await callback(url, res);
     if (url.pathname === '/api/submit' && req.method === 'POST') return await apiSubmit(req, url, res);
@@ -241,3 +250,12 @@ server.listen(PORT, () => {
   log(`PR service on ${PUBLIC_URL} (callback ${CALLBACK}); forks in ${FORK_OWNER}`);
   if (STATIC) log(`serving ${STATIC} at ${PUBLIC_URL}/`);
 });
+
+// Containers stop with SIGTERM; finish requests in flight (a submission can take seconds).
+for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(sig, () => {
+    log(`${sig}: stopping`);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 20_000).unref();
+  });
+}

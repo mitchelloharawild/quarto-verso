@@ -6,7 +6,11 @@ produced locally, checked mechanically, built into `/<lang>/` mirrors of the
 site, and improved by readers through reviewer mode and pull requests opened
 by a GitHub App (in the style of giscus).
 
-Status: in development. The GitHub App PR service is not built yet.
+Status: in development. The PR service runs as one shared instance for every
+site and is published as a container image, `ghcr.io/mitchelloharawild/verso-service`
+(see [`service/README.md`](service/README.md)).
+
+Licence: MIT.
 
 ## Layout
 
@@ -16,6 +20,7 @@ Status: in development. The GitHub App PR service is not built yet.
 | `src/adapters/` | Pandoc (Markdown), Quarto host (binaries, render mode, nested render) |
 | `src/cli/` | `translate`, `status`, `check`, `build`, `hook`, `sync` |
 | `_extensions/verso/` | The installable extension: bundled `i18n.mjs`, `hook.ts`, `tr.lua`, `review.js`/`review.css` |
+| `service/` | The shared PR service (GitHub sign-in, submissions → fork commit + PR); `Dockerfile` builds its image |
 | `templates/i18n-check.yml` | GitHub Actions workflow for site repositories: checks contribution PRs |
 | `test/` | `node --test` suite for the core |
 

@@ -1,9 +1,13 @@
-// Bundle src/cli/main.ts (and the yaml library) into the extension's single entry file.
+// Bundle an entry point (and the yaml library) into a single file.
+//   node scripts/build.mjs            the extension (_extensions/verso/i18n.mjs)
+//   node scripts/build.mjs --service  the PR service (service/dist/server.mjs)
 import { build } from 'esbuild';
 
+const service = process.argv.includes('--service');
+
 await build({
-  entryPoints: ['src/cli/main.ts'],
-  outfile: '_extensions/verso/i18n.mjs',
+  entryPoints: [service ? 'service/server.ts' : 'src/cli/main.ts'],
+  outfile: service ? 'service/dist/server.mjs' : '_extensions/verso/i18n.mjs',
   bundle: true,
   platform: 'node',
   format: 'esm',

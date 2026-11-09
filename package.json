@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Managed LLM translations for Quarto projects (development repo)",
+  "license": "MIT",
   "engines": {
     "node": ">=24"
   },

@@ -27,9 +27,16 @@ export function quartoBin(): string {
   return which('quarto') ?? 'quarto';
 }
 
-/** Pandoc bundled with Quarto, called directly for speed; `quarto pandoc` as fallback. */
+/**
+ * Pandoc bundled with Quarto, called directly for speed; `quarto pandoc` as
+ * fallback. Without Quarto (the PR service's container), `pandoc` on the PATH.
+ */
 export function pandocCommand(): { cmd: string; args: string[] } {
   const q = quartoBin();
+  if (q === 'quarto') {
+    const pd = which('pandoc');
+    if (pd) return { cmd: pd, args: [] };
+  }
   try {
     const real = fs.realpathSync(q);
     const p = path.join(path.dirname(real), 'tools', process.platform === 'win32' ? 'pandoc.exe' : 'pandoc');
