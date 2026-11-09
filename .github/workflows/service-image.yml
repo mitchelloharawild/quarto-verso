@@ -31,6 +31,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: 1.10.18
       - run: npm ci
       - run: npm run -s typecheck
       - run: npm test
