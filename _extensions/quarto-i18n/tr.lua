@@ -2,7 +2,7 @@
 --
 -- It reads what the materialiser wrote and does three things:
 --   1. moves data-tr-* (and fallback lang) from the wrapper span onto the block;
---   2. inserts the machine-translation notice (metadata i18n.notice);
+--   2. marks where the translation banner goes (metadata i18n.notice);
 --   3. loads the reviewer-mode script and styles on HTML pages.
 -- All decisions are made in the Node tool; this filter stays small.
 
@@ -47,14 +47,8 @@ end
 local function notice(doc)
   local i18n = doc.meta.i18n
   if not i18n or not i18n.notice then return nil end
-  local content = i18n.notice
-  local blocks
-  if pandoc.utils.type(content) == "Blocks" then
-    blocks = content
-  else
-    blocks = pandoc.Blocks({ pandoc.Plain(pandoc.Inlines(content)) })
-  end
-  local div = pandoc.Div(blocks, pandoc.Attr("", { "tr-notice" }, { role = "note" }))
+  -- A placeholder: the build replaces it with the translation banner.
+  local div = pandoc.RawBlock("html", '<div class="tr-notice"></div>')
   -- After the first level-1 heading (the chapter title in books), else at the top.
   local at = 1
   for i, b in ipairs(doc.blocks) do

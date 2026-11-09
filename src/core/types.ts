@@ -118,6 +118,8 @@ export interface TranslateConfig {
     service?: string;
     /** Directory of the site inside the repository, when not the root. */
     dir?: string;
+    /** Page that explains reviewing (a project file such as `contributing.qmd`, or a URL). */
+    guide?: string;
   };
 }
 

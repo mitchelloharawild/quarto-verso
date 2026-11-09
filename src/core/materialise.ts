@@ -29,6 +29,8 @@ export interface PageUnit {
   hash: string;
   lang?: string;
   reason?: string;
+  /** Who wrote the translation shown (`llm`, `gh:<login>`, `unknown`). */
+  by?: string;
   weight: number;
 }
 
@@ -69,7 +71,7 @@ export function materialise(text: string, synced: SyncedUnit[], o: MaterialiseOp
     const pu: PageUnit = {
       id: u.id, kind: s.kind, status, reviews: usable ? (st?.reviews ?? []) : [], count: usable ? reviewCount(u) : 0,
       source: s.source, section: s.section, cell: s.cell, field: s.field, heading: s.heading, lang: s.lang, hash: s.hash, reason,
-      weight: s.source.length,
+      by: usable ? st?.origin?.by : undefined, weight: s.source.length,
     };
     if (u.status === 'stale' && st) {
       pu.previous = st.text;

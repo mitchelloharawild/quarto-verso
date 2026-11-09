@@ -7949,6 +7949,7 @@ function materialise(text, synced, o) {
       lang: s.lang,
       hash: s.hash,
       reason,
+      by: usable ? st?.origin?.by : void 0,
       weight: s.source.length
     };
     if (u.status === "stale" && st) {
@@ -8016,9 +8017,17 @@ ${yaml}
 }
 
 // src/core/score.ts
+var login = (by) => by?.startsWith("gh:") ? by.slice(3) : void 0;
 function pageStats(units, target) {
   const total = units.reduce((n, u) => n + u.weight, 0) || 1;
   const share = (f) => units.filter(f).reduce((n, u) => n + u.weight, 0) / total;
+  const shown = units.filter((u) => u.status === "machine" || u.status === "reviewed");
+  const humanMade = (u) => u.by !== void 0 && u.by !== "llm";
+  const people = /* @__PURE__ */ new Map();
+  for (const u of shown) {
+    const who = new Set([login(u.by), ...u.reviews.map((r) => login(r.by))].filter((x) => !!x));
+    for (const w of who) people.set(w, (people.get(w) ?? 0) + 1);
+  }
   return {
     units: units.length,
     translated: share((u) => u.status === "machine" || u.status === "reviewed"),
@@ -8027,22 +8036,44 @@ function pageStats(units, target) {
     fallback: share((u) => u.status === "stale" || u.status === "missing"),
     stale: units.filter((u) => u.status === "stale").length,
     missing: units.filter((u) => u.status === "missing").length,
-    target
+    target,
+    human: shown.filter(humanMade).length,
+    verified: shown.filter((u) => !humanMade(u) && u.count >= 1).length,
+    machine: shown.filter((u) => !humanMade(u) && u.count === 0).length,
+    people: sortPeople(people)
   };
+}
+function sortPeople(m) {
+  return [...m].map(([login2, units]) => ({ login: login2, units })).sort((a, b) => b.units - a.units || a.login.localeCompare(b.login));
 }
 function mergeStats(all, weights, target) {
   const W = weights.reduce((a, b) => a + b, 0) || 1;
   const avg = (k) => all.reduce((n, s, i) => n + s[k] * weights[i], 0) / W;
+  const sum = (k) => all.reduce((n, s) => n + s[k], 0);
+  const people = /* @__PURE__ */ new Map();
+  for (const s of all) for (const c of s.people) people.set(c.login, (people.get(c.login) ?? 0) + c.units);
   return {
-    units: all.reduce((n, s) => n + s.units, 0),
+    units: sum("units"),
     translated: avg("translated"),
     reviewed: avg("reviewed"),
     full: avg("full"),
     fallback: avg("fallback"),
-    stale: all.reduce((n, s) => n + s.stale, 0),
-    missing: all.reduce((n, s) => n + s.missing, 0),
-    target
+    stale: sum("stale"),
+    missing: sum("missing"),
+    target,
+    human: sum("human"),
+    verified: sum("verified"),
+    machine: sum("machine"),
+    people: sortPeople(people)
   };
+}
+function bannerState(s) {
+  if (s.human + s.verified + s.machine === 0) return "untranslated";
+  const all = s.units || 1;
+  const touched = (s.human + s.verified) / all;
+  if (touched < 0.2) return "machine";
+  if (touched < 0.8) return "partial";
+  return s.human / all >= 0.5 ? "human" : "reviewed";
 }
 function pct(x) {
   return `${Math.round(x * 100)}%`;
@@ -8050,15 +8081,37 @@ function pct(x) {
 
 // src/core/strings.ts
 var en = {
-  notice: "This page was translated from {src} by AI.",
+  bannerLabel: "About this translation",
+  translatedFrom: "Translated from {src}",
   untranslated: "This page has not been translated yet and is shown in {src}.",
-  noneReviewed: "No one has reviewed it yet.",
-  someReviewed: "{p} has been reviewed by at least one person.",
-  fullReviewed: "{p} by {n} or more people.",
-  allReviewed: "It has been fully reviewed by people.",
-  fallback: "{p} is shown in {src} because the translation is missing or out of date.",
-  viewOriginal: "View original",
-  review: "Review this page",
+  state_untranslated: "Not translated yet",
+  state_machine: "Machine translated",
+  state_partial: "Partly reviewed by people",
+  state_reviewed: "Reviewed by people",
+  state_human: "Human translated and reviewed",
+  readOriginal: "Read the original",
+  segHuman: "{n} human translated",
+  segVerified: "{n} machine translated, verified by people",
+  segMachine: "{n} machine translated, not yet reviewed",
+  segAllMachine: "The paragraph is machine translated||All {n} paragraphs machine translated",
+  segFallback: "{n} not yet translated",
+  thanks: "With thanks to {names} for helping with this page.",
+  credit: "Translated and reviewed by {names}. Thank you all.",
+  others: "{n} other||{n} others",
+  nobody: "No one has reviewed this page yet. Help review the translation and be credited here.",
+  ctaFirstTitle: "Read {lang}? Be the first to help.",
+  ctaFirstBody: "Even approving a few paragraphs that read well tells future readers they can trust them.",
+  ctaTitle: "Read {lang}? We\u2019d love your help.",
+  ctaBody: "Approve a paragraph or suggest a better translation. Each one helps every reader after you.",
+  ctaHumanTitle: "Found a problem others missed?",
+  ctaHumanBody: "Suggest a better translation. Suggestions are warmly welcomed.",
+  reviewTranslation: "Review the translation",
+  improveTranslation: "Improve the translation",
+  reviewThanks: "Thank you for reviewing, {login}!",
+  reviewOn: "You\u2019re reviewing this page.",
+  reviewHow: "Select a paragraph to approve it or suggest a better translation.",
+  reviewPr: "Your changes become a pull request from your GitHub account.",
+  reviewGuide: "How reviewing works",
   exitReview: "Leave review mode",
   source: "Original",
   translation: "Translation",
@@ -8069,11 +8122,17 @@ var en = {
   cancel: "Cancel",
   save: "Save suggestion",
   pending: "{n} pending",
-  submit: "Submit as a pull request",
+  submit: "Submit your review as a pull request",
+  submitNote: "Opens a pull request from your account.",
+  submitting: "Opening a pull request\u2026",
+  trayTitle: "Your review",
+  trayHere: "{n} change on this page||{n} changes on this page",
+  trayOther: "{n} change on another page||{n} changes on another page",
+  trayPages: "{n} changes on {p} pages",
+  countApproved: "{n} approved",
+  countImproved: "{n} better translation||{n} better translations",
   clear: "Discard",
-  pendingPages: "{n} pending on {p} pages",
-  thisPage: "this page",
-  clearPage: "Discard this page",
+  thisPage: "This page",
   clearAll: "Discard all",
   clearAllConfirm: "Discard all {n} pending changes on {p} pages?",
   signIn: "Sign in with GitHub",
@@ -8088,6 +8147,10 @@ var en = {
   previous: "Previous translation",
   code: "Code",
   submitted: "Pull request opened",
+  submittedThanks: "Thank you, {login}!",
+  submittedBody: "Your changes are in pull request {pr}. Your name appears in the banner once it\u2019s merged.",
+  viewOnGitHub: "View on GitHub",
+  keepReviewing: "Keep reviewing",
   held: "{n} not submitted",
   heldOne: "Not submitted",
   retry: "Try again",
@@ -8100,15 +8163,37 @@ var en = {
   languages: "Languages"
 };
 var fr = {
-  notice: "Cette page a \xE9t\xE9 traduite de l\u2019{src} par une IA.",
+  bannerLabel: "\xC0 propos de cette traduction",
+  translatedFrom: "Traduit de l\u2019{src}",
   untranslated: "Cette page n\u2019a pas encore \xE9t\xE9 traduite et s\u2019affiche en {src}.",
-  noneReviewed: "Personne ne l\u2019a encore relue.",
-  someReviewed: "{p} a \xE9t\xE9 relu par au moins une personne.",
-  fullReviewed: "{p} par {n} personnes ou plus.",
-  allReviewed: "Elle a \xE9t\xE9 enti\xE8rement relue par des personnes.",
-  fallback: "{p} est affich\xE9 en {src}, car la traduction manque ou n\u2019est plus \xE0 jour.",
-  viewOriginal: "Voir l\u2019original",
-  review: "Relire cette page",
+  state_untranslated: "Pas encore traduite",
+  state_machine: "Traduction automatique",
+  state_partial: "Relue en partie par des personnes",
+  state_reviewed: "Relue par des personnes",
+  state_human: "Traduite et relue par des personnes",
+  readOriginal: "Lire l\u2019original",
+  segHuman: "{n} traduit par des personnes||{n} traduits par des personnes",
+  segVerified: "{n} traduit automatiquement, v\xE9rifi\xE9 par des personnes||{n} traduits automatiquement, v\xE9rifi\xE9s par des personnes",
+  segMachine: "{n} traduit automatiquement, pas encore relu||{n} traduits automatiquement, pas encore relus",
+  segAllMachine: "Le paragraphe est traduit automatiquement||Les {n} paragraphes traduits automatiquement",
+  segFallback: "{n} pas encore traduit||{n} pas encore traduits",
+  thanks: "Merci \xE0 {names} pour l\u2019aide apport\xE9e \xE0 cette page.",
+  credit: "Traduite et relue par {names}. Merci \xE0 tous.",
+  others: "{n} autre personne||{n} autres personnes",
+  nobody: "Personne n\u2019a encore relu cette page. Aidez \xE0 relire la traduction et votre nom appara\xEEtra ici.",
+  ctaFirstTitle: "Vous lisez le {lang} ? Soyez la premi\xE8re personne \xE0 aider.",
+  ctaFirstBody: "Approuver quelques paragraphes qui se lisent bien indique d\xE9j\xE0 aux prochains lecteurs qu\u2019ils peuvent s\u2019y fier.",
+  ctaTitle: "Vous lisez le {lang} ? Votre aide serait pr\xE9cieuse.",
+  ctaBody: "Approuvez un paragraphe ou proposez une meilleure traduction. Chaque contribution aide tous les lecteurs suivants.",
+  ctaHumanTitle: "Vous avez rep\xE9r\xE9 un probl\xE8me qui a \xE9chapp\xE9 aux autres ?",
+  ctaHumanBody: "Proposez une meilleure traduction. Les suggestions sont toujours les bienvenues.",
+  reviewTranslation: "Relire la traduction",
+  improveTranslation: "Am\xE9liorer la traduction",
+  reviewThanks: "Merci de votre relecture, {login} !",
+  reviewOn: "Vous relisez cette page.",
+  reviewHow: "S\xE9lectionnez un paragraphe pour l\u2019approuver ou proposer une meilleure traduction.",
+  reviewPr: "Vos modifications deviennent une pull request depuis votre compte GitHub.",
+  reviewGuide: "Comment fonctionne la relecture",
   exitReview: "Quitter la relecture",
   source: "Original",
   translation: "Traduction",
@@ -8119,11 +8204,17 @@ var fr = {
   cancel: "Annuler",
   save: "Enregistrer la proposition",
   pending: "{n} en attente",
-  submit: "Soumettre en pull request",
+  submit: "Soumettre votre relecture en pull request",
+  submitNote: "Ouvre une pull request depuis votre compte.",
+  submitting: "Ouverture de la pull request\u2026",
+  trayTitle: "Votre relecture",
+  trayHere: "{n} modification sur cette page||{n} modifications sur cette page",
+  trayOther: "{n} modification sur une autre page||{n} modifications sur une autre page",
+  trayPages: "{n} modifications sur {p} pages",
+  countApproved: "{n} approuv\xE9||{n} approuv\xE9s",
+  countImproved: "{n} meilleure traduction||{n} meilleures traductions",
   clear: "Abandonner",
-  pendingPages: "{n} en attente sur {p} pages",
-  thisPage: "cette page",
-  clearPage: "Abandonner cette page",
+  thisPage: "Cette page",
   clearAll: "Tout abandonner",
   clearAllConfirm: "Abandonner les {n} modifications en attente sur {p} pages ?",
   signIn: "Se connecter avec GitHub",
@@ -8138,6 +8229,10 @@ var fr = {
   previous: "Traduction pr\xE9c\xE9dente",
   code: "Code",
   submitted: "Pull request ouverte",
+  submittedThanks: "Merci, {login} !",
+  submittedBody: "Vos modifications sont dans la pull request {pr}. Votre nom appara\xEEtra dans le bandeau une fois qu\u2019elle sera fusionn\xE9e.",
+  viewOnGitHub: "Voir sur GitHub",
+  keepReviewing: "Continuer la relecture",
   held: "{n} non soumises",
   heldOne: "Non soumise",
   retry: "R\xE9essayer",
@@ -8150,15 +8245,37 @@ var fr = {
   languages: "Langues"
 };
 var es = {
-  notice: "Esta p\xE1gina fue traducida del {src} por IA.",
+  bannerLabel: "Sobre esta traducci\xF3n",
+  translatedFrom: "Traducido del {src}",
   untranslated: "Esta p\xE1gina a\xFAn no est\xE1 traducida y se muestra en {src}.",
-  noneReviewed: "Nadie la ha revisado todav\xEDa.",
-  someReviewed: "El {p} ha sido revisado por al menos una persona.",
-  fullReviewed: "El {p} por {n} o m\xE1s personas.",
-  allReviewed: "Ha sido revisada por completo por personas.",
-  fallback: "El {p} se muestra en {src} porque falta la traducci\xF3n o est\xE1 desactualizada.",
-  viewOriginal: "Ver original",
-  review: "Revisar esta p\xE1gina",
+  state_untranslated: "Sin traducir todav\xEDa",
+  state_machine: "Traducci\xF3n autom\xE1tica",
+  state_partial: "Revisada en parte por personas",
+  state_reviewed: "Revisada por personas",
+  state_human: "Traducida y revisada por personas",
+  readOriginal: "Leer el original",
+  segHuman: "{n} traducido por personas||{n} traducidos por personas",
+  segVerified: "{n} traducido autom\xE1ticamente, verificado por personas||{n} traducidos autom\xE1ticamente, verificados por personas",
+  segMachine: "{n} traducido autom\xE1ticamente, sin revisar||{n} traducidos autom\xE1ticamente, sin revisar",
+  segAllMachine: "El p\xE1rrafo est\xE1 traducido autom\xE1ticamente||Los {n} p\xE1rrafos traducidos autom\xE1ticamente",
+  segFallback: "{n} sin traducir todav\xEDa",
+  thanks: "Gracias a {names} por ayudar con esta p\xE1gina.",
+  credit: "Traducida y revisada por {names}. \xA1Gracias a todos!",
+  others: "{n} persona m\xE1s||{n} personas m\xE1s",
+  nobody: "Nadie ha revisado esta p\xE1gina todav\xEDa. Ayuda a revisar la traducci\xF3n y aparecer\xE1s aqu\xED.",
+  ctaFirstTitle: "\xBFLees {lang}? S\xE9 la primera persona en ayudar.",
+  ctaFirstBody: "Aprobar unos pocos p\xE1rrafos que se leen bien ya indica a los pr\xF3ximos lectores que pueden confiar en ellos.",
+  ctaTitle: "\xBFLees {lang}? Nos encantar\xEDa tu ayuda.",
+  ctaBody: "Aprueba un p\xE1rrafo o sugiere una traducci\xF3n mejor. Cada aporte ayuda a todos los que leen despu\xE9s.",
+  ctaHumanTitle: "\xBFEncontraste un problema que otros pasaron por alto?",
+  ctaHumanBody: "Sugiere una traducci\xF3n mejor. Las sugerencias son muy bienvenidas.",
+  reviewTranslation: "Revisar la traducci\xF3n",
+  improveTranslation: "Mejorar la traducci\xF3n",
+  reviewThanks: "\xA1Gracias por revisar, {login}!",
+  reviewOn: "Est\xE1s revisando esta p\xE1gina.",
+  reviewHow: "Selecciona un p\xE1rrafo para aprobarlo o sugerir una traducci\xF3n mejor.",
+  reviewPr: "Tus cambios se convierten en una pull request desde tu cuenta de GitHub.",
+  reviewGuide: "C\xF3mo funciona la revisi\xF3n",
   exitReview: "Salir de la revisi\xF3n",
   source: "Original",
   translation: "Traducci\xF3n",
@@ -8169,11 +8286,17 @@ var es = {
   cancel: "Cancelar",
   save: "Guardar sugerencia",
   pending: "{n} pendientes",
-  submit: "Enviar como pull request",
+  submit: "Enviar tu revisi\xF3n como pull request",
+  submitNote: "Abre una pull request desde tu cuenta.",
+  submitting: "Abriendo la pull request\u2026",
+  trayTitle: "Tu revisi\xF3n",
+  trayHere: "{n} cambio en esta p\xE1gina||{n} cambios en esta p\xE1gina",
+  trayOther: "{n} cambio en otra p\xE1gina||{n} cambios en otra p\xE1gina",
+  trayPages: "{n} cambios en {p} p\xE1ginas",
+  countApproved: "{n} aprobado||{n} aprobados",
+  countImproved: "{n} traducci\xF3n mejorada||{n} traducciones mejoradas",
   clear: "Descartar",
-  pendingPages: "{n} pendientes en {p} p\xE1ginas",
-  thisPage: "esta p\xE1gina",
-  clearPage: "Descartar esta p\xE1gina",
+  thisPage: "Esta p\xE1gina",
   clearAll: "Descartar todo",
   clearAllConfirm: "\xBFDescartar los {n} cambios pendientes en {p} p\xE1ginas?",
   signIn: "Iniciar sesi\xF3n con GitHub",
@@ -8188,6 +8311,10 @@ var es = {
   previous: "Traducci\xF3n anterior",
   code: "C\xF3digo",
   submitted: "Pull request abierta",
+  submittedThanks: "\xA1Gracias, {login}!",
+  submittedBody: "Tus cambios est\xE1n en la pull request {pr}. Tu nombre aparecer\xE1 en el aviso de la traducci\xF3n cuando se fusione.",
+  viewOnGitHub: "Ver en GitHub",
+  keepReviewing: "Seguir revisando",
   held: "{n} sin enviar",
   heldOne: "Sin enviar",
   retry: "Reintentar",
@@ -8200,8 +8327,11 @@ var es = {
   languages: "Idiomas"
 };
 var TABLE = { en, fr, es };
+function uiLang(lang) {
+  return TABLE[lang] ? lang : TABLE[lang.split("-")[0]] ? lang.split("-")[0] : "en";
+}
 function uiStrings(lang) {
-  return TABLE[lang] ?? TABLE[lang.split("-")[0]] ?? en;
+  return TABLE[uiLang(lang)];
 }
 function languageName(code, inLang) {
   try {
@@ -8214,8 +8344,62 @@ function endonym(code) {
   const n = languageName(code, code);
   return n.charAt(0).toLocaleUpperCase(code) + n.slice(1);
 }
-function fill(s, vars) {
+function fill(s, vars, lang = "en") {
+  const forms = s.split("||");
+  if (forms.length === 2 && typeof vars.n === "number") s = new Intl.PluralRules(lang).select(vars.n) === "one" ? forms[0] : forms[1];
   return s.replace(/\{(\w+)\}/g, (m, k) => k in vars ? String(vars[k]) : m);
+}
+
+// src/cli/banner.ts
+var esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+var MAX_AVATARS = 5;
+var ICON_TRANSLATE = '<svg class="tr-banner-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>';
+var ICON_CHECK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+var ICON_PLUS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+var ICON_GITHUB = '<svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
+function bannerHtml(b) {
+  const S = uiStrings(b.lang);
+  const ui = uiLang(b.lang);
+  const s = b.stats;
+  const src = languageName(b.sourceLang, ui);
+  const state = bannerState(s);
+  const fallback = s.stale + s.missing;
+  const touched = s.human + s.verified;
+  const label = esc(S[`state_${state}`]);
+  const badge = `<span class="tr-banner-state" data-state="${state}">${state === "human" ? ICON_CHECK : ""}${label}</span>`;
+  const head = `<div class="tr-banner-head">${ICON_TRANSLATE}<span class="tr-banner-title">${esc(state === "untranslated" ? fill(S.untranslated, { src }) : fill(S.translatedFrom, { src }))}</span>${state === "untranslated" ? "" : badge}<a class="tr-original" href="${esc(b.original)}" hreflang="${esc(b.sourceLang)}">${esc(S.readOriginal)}</a></div>`;
+  let bar = "";
+  if (state !== "untranslated") {
+    const segs = [
+      { kind: "human", n: s.human, text: S.segHuman },
+      { kind: "verified", n: s.verified, text: S.segVerified },
+      { kind: "machine", n: s.machine, text: S.segMachine },
+      { kind: "fallback", n: fallback, text: S.segFallback }
+    ].filter((x) => x.n > 0);
+    const allMachine = segs.length === 1 && segs[0].kind === "machine";
+    const items = allMachine ? [{ ...segs[0], text: S.segAllMachine }] : segs;
+    const say = (x) => fill(x.text, { n: x.n, src }, ui);
+    bar = `<div class="tr-banner-bar" role="img" aria-label="${esc(items.map(say).join("; "))}">` + segs.map((x) => `<span data-kind="${x.kind}" style="flex-grow:${x.n}"></span>`).join("") + `</div><ul class="tr-banner-legend" aria-hidden="true">` + items.map((x) => `<li><span class="tr-banner-key" data-kind="${x.kind}"></span>${esc(say(x))}</li>`).join("") + `</ul>`;
+  }
+  let people = "";
+  if (s.people.length) {
+    const shown = s.people.slice(0, MAX_AVATARS);
+    const extra = s.people.length - shown.length;
+    const avatars = `<span class="tr-banner-avatars" aria-hidden="true">` + shown.map((c) => `<img src="https://github.com/${encodeURIComponent(c.login)}.png?size=64" alt="" width="30" height="30" loading="lazy" title="@${esc(c.login)}">`).join("") + (extra > 0 ? `<span class="tr-banner-more">+${extra}</span>` : "") + `</span>`;
+    const link = (l) => `<a href="https://github.com/${encodeURIComponent(l)}">@${esc(l)}</a>`;
+    const named = s.people.length <= 3 ? s.people : s.people.slice(0, 2);
+    const parts = named.map((c) => link(c.login));
+    if (named.length < s.people.length) parts.push(esc(fill(S.others, { n: s.people.length - named.length }, ui)));
+    const names = new Intl.ListFormat(ui, { type: "conjunction" }).format(parts);
+    const text = fill(state === "human" ? esc(S.credit) : esc(S.thanks), { names });
+    people = `<div class="tr-banner-people">${avatars}<p>${text}</p></div>`;
+  } else if (touched === 0) {
+    people = `<div class="tr-banner-people"><span class="tr-banner-empty" aria-hidden="true">${ICON_PLUS}</span><p>${esc(S.nobody)}</p></div>`;
+  }
+  const lang = languageName(b.lang, ui);
+  const cta = state === "human" ? { title: S.ctaHumanTitle, body: S.ctaHumanBody, button: S.improveTranslation } : touched === 0 ? { title: fill(S.ctaFirstTitle, { lang }), body: S.ctaFirstBody, button: S.reviewTranslation } : { title: fill(S.ctaTitle, { lang }), body: S.ctaBody, button: S.improveTranslation };
+  const action = `<div class="tr-banner-cta"><div class="tr-banner-cta-text"><strong>${esc(cta.title)}</strong><span>${esc(cta.body)}</span></div><a class="tr-review-toggle tr-banner-button${state === "human" ? " tr-banner-button-quiet" : ""}" href="?review=1">${ICON_GITHUB}<span class="tr-toggle-text">${esc(cta.button)}</span></a></div>`;
+  return `<aside class="tr-banner" data-state="${state}" aria-label="${esc(S.bannerLabel)}"><div class="tr-banner-main">${head}${bar}${people}</div>${action}</aside>`;
 }
 
 // src/cli/project.ts
@@ -9157,25 +9341,6 @@ function mirrorConfig(p, lang, proj) {
   return `# Generated by quarto-i18n for ${lang}. Do not edit.
 ` + doc.toString({ lineWidth: 0 });
 }
-function noticeMarkdown(p, lang, stats, page) {
-  const S = uiStrings(lang);
-  const src = languageName(p.tc.source, lang);
-  if (stats.translated <= 1e-4) {
-    const original2 = "../".repeat(page.split("/").length) + page;
-    return `${fill(S.untranslated, { src })} [${S.viewOriginal.replace(/[[\]]/g, "\\$&")}](${original2}){.tr-original}`;
-  }
-  const parts = [fill(S.notice, { src })];
-  if (stats.full >= 0.999) parts.push(S.allReviewed);
-  else if (stats.reviewed <= 1e-4) parts.push(S.noneReviewed);
-  else {
-    parts.push(fill(S.someReviewed, { p: pct(stats.reviewed) }));
-    if (stats.full > 1e-4) parts[parts.length - 1] = parts[parts.length - 1].replace(/\.$/, ",") + " " + fill(S.fullReviewed, { p: pct(stats.full), n: stats.target });
-  }
-  if (stats.fallback > 1e-4) parts.push(fill(S.fallback, { p: pct(stats.fallback), src }));
-  const original = "../".repeat(page.split("/").length) + page;
-  const toLink = (s) => s.replace(/[[\]]/g, "\\$&");
-  return `${parts.join(" ")} [${toLink(S.viewOriginal)}](${original}){.tr-original} \xB7 [${toLink(S.review)}](?review=1){.tr-review-toggle}`;
-}
 async function buildLanguage(p, lang, log2) {
   const mirror = path3.join(p.i18nDir, "build", lang);
   const files = p.sources();
@@ -9200,7 +9365,7 @@ async function buildLanguage(p, lang, log2) {
     const first = materialise(text, st.synced, opts);
     const stats = pageStats(first.units, p.reviewTarget);
     const minCoverage = p.tc["min-coverage"] ?? 0.5;
-    const extra = { i18n: { lang, notice: noticeMarkdown(p, lang, stats, page) } };
+    const extra = { i18n: { lang, notice: true } };
     if (stats.translated < minCoverage) extra["include-in-header"] = [{ text: '<meta name="robots" content="noindex">' }];
     const m = materialise(text, st.synced, { ...opts, meta: extra });
     if (!structureFallback.has(st.file)) {
@@ -9253,6 +9418,7 @@ ${lines.slice(-15).join("\n")}`);
       // "Edit on GitHub" opens the file that holds the text.
       tfile: p.storedPaths(lang, st.file)[0],
       original: "../".repeat(page.split("/").length) + page,
+      guide: guideHref(p.tc.review?.guide, page),
       repo,
       dir: p.tc.review?.dir ?? "",
       service: p.tc.review?.service ?? null,
@@ -9263,6 +9429,11 @@ ${lines.slice(-15).join("\n")}`);
     };
     const out = path3.join(dest, page.replace(/\.html$/, ".tr.json"));
     if (fs3.existsSync(path3.dirname(out))) fs3.writeFileSync(out, JSON.stringify(data));
+    const html = path3.join(dest, page);
+    if (fs3.existsSync(html)) {
+      const banner = bannerHtml({ lang, sourceLang: p.tc.source, stats: statsOf.get(st.file), original: data.original });
+      fs3.writeFileSync(html, fs3.readFileSync(html, "utf8").replace(NOTICE, () => banner));
+    }
   }
   const pages = files.map((f) => ({ file: f, stats: statsOf.get(f) }));
   const report = {
@@ -9276,6 +9447,12 @@ ${lines.slice(-15).join("\n")}`);
   fs3.writeFileSync(path3.join(mirror, "i18n-report.json"), JSON.stringify(report, null, 2));
   return report;
 }
+function guideHref(guide, page) {
+  if (!guide) return null;
+  if (/^[a-z]+:\/\//i.test(guide)) return guide;
+  return rel(page, pageOf(guide.replace(/^\//, "")));
+}
+var NOTICE = '<div class="tr-notice"></div>';
 function slim(u) {
   const { weight: _w, ...rest } = u;
   return rest;
@@ -9385,9 +9562,9 @@ async function checkContribution(base, head, changed, ctx) {
     res[n - 1].ok = false;
     res[n - 1].messages.push(m);
   };
-  const esc = ctx.prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  ({ base, head, changed } = await expandDocs(base, head, changed, ctx, esc, fail));
-  const allowed = new RegExp(`^${esc}_i18n/([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/(?!_freeze/|build/)[^\\0]+\\.yml$`);
+  const esc2 = ctx.prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  ({ base, head, changed } = await expandDocs(base, head, changed, ctx, esc2, fail));
+  const allowed = new RegExp(`^${esc2}_i18n/([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/(?!_freeze/|build/)[^\\0]+\\.yml$`);
   if (ctx.branch !== void 0 && !ctx.branch.startsWith("i18n/")) fail(1, `branch ${ctx.branch} is not under i18n/`);
   const files = [];
   for (const p of changed) {
@@ -9481,8 +9658,8 @@ async function checkContribution(base, head, changed, ctx) {
   }
   return res;
 }
-async function expandDocs(base, head, changed, ctx, esc, fail) {
-  const doc = new RegExp(`^${esc}_i18n/[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*/(?!_freeze/|build/)[^\\0]+\\.(?:qmd|md)$`);
+async function expandDocs(base, head, changed, ctx, esc2, fail) {
+  const doc = new RegExp(`^${esc2}_i18n/[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*/(?!_freeze/|build/)[^\\0]+\\.(?:qmd|md)$`);
   const groups = /* @__PURE__ */ new Set();
   const rest = [];
   for (const p of changed) {

@@ -45,8 +45,23 @@
     });
     return e;
   }
+  // Strings with a count may be `one||other`.
   function fill(s, vars) {
+    var forms = String(s).split("||");
+    if (forms.length === 2 && typeof vars.n === "number") {
+      var one = false;
+      try { one = new Intl.PluralRules((data && data.lang) || "en").select(vars.n) === "one"; } catch (e) { one = vars.n === 1; }
+      s = one ? forms[0] : forms[1];
+    }
     return String(s).replace(/\{(\w+)\}/g, function (m, k) { return k in vars ? vars[k] : m; });
+  }
+  var ICON_GITHUB = '<svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
+  // A fixed icon (never reader text) inside an element.
+  function icon(svg) {
+    var s = document.createElement("span");
+    s.className = "tr-icon";
+    s.innerHTML = svg;
+    return s;
   }
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -102,9 +117,45 @@
   function updateToggleText() {
     var on = document.body.classList.contains("tr-review-on");
     document.querySelectorAll("a.tr-review-toggle").forEach(function (a) {
-      if (!a.dataset.label) a.dataset.label = a.textContent;
-      a.textContent = on && S.exitReview ? S.exitReview : a.dataset.label;
+      var label = a.querySelector(".tr-toggle-text") || a;
+      if (!a.dataset.label) a.dataset.label = label.textContent;
+      label.textContent = on && S.exitReview ? S.exitReview : a.dataset.label;
       a.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  // ---- banner -----------------------------------------------------------------
+  // In reviewer mode the banner's call to action becomes a thank-you to the
+  // signed-in reviewer, with a link to how reviewing works.
+  function updateBanner() {
+    var on = document.body.classList.contains("tr-review-on");
+    var me = load("login", null);
+    var signed = !!(me && load("session", null));
+    var reviewing = on && data && (signed || !data.service);
+    document.querySelectorAll(".tr-banner").forEach(function (b) {
+      var old = b.querySelector(".tr-banner-reviewing");
+      if (old) old.parentNode.removeChild(old);
+      var cta = b.querySelector(".tr-banner-cta");
+      if (cta) cta.hidden = !!reviewing;
+      if (!reviewing) return;
+      var how = [S.reviewHow + " "];
+      if (signed) how.push(S.reviewPr + " ");
+      if (data.guide) how.push(el("a", { href: data.guide }, [S.reviewGuide]));
+      var text = [
+        el("strong", {}, [signed ? fill(S.reviewThanks, { login: "@" + me }) : S.reviewOn]),
+        el("span", {}, how),
+      ];
+      if (signed) {
+        text.push(el("span", { class: "tr-banner-signed" }, [
+          fill(S.signedInAs, { login: "@" + me }) + " · ",
+          el("button", { type: "button", class: "tr-banner-signout", onclick: signOut }, [S.signOut]),
+        ]));
+      }
+      b.appendChild(el("div", { class: "tr-banner-cta tr-banner-reviewing" }, [
+        signed ? el("img", { class: "tr-banner-me", src: "https://github.com/" + encodeURIComponent(me) + ".png?size=80", alt: "", width: "40", height: "40" }) : null,
+        el("div", { class: "tr-banner-cta-text" }, text),
+        el("a", { class: "tr-banner-button tr-banner-button-quiet", href: "?review=0", onclick: function (ev) { ev.preventDefault(); setMode(false); } }, [S.exitReview]),
+      ]));
     });
   }
 
@@ -258,6 +309,8 @@
   // Another tab changed the list: show the same thing here.
   window.addEventListener("storage", function (ev) {
     if (data && ev.key === KEY + pendingKey()) { refreshPendingMarks(); renderTray(); }
+    // Signed out in another tab: leave reviewer mode here too.
+    if (ev.key === KEY + "login" && ev.newValue === null && document.body.classList.contains("tr-review-on")) setMode(false);
   });
   function addOp(op) {
     var list = pendingAll().filter(function (p) {
@@ -477,21 +530,38 @@
     if (!signedIn()) return showSignIn();
     var all = pendingAll();
     if (!tray) {
-      tray = el("div", { class: "tr-tray", role: "region", "aria-live": "polite", "aria-label": S.submit });
+      tray = el("section", { class: "tr-tray", "aria-live": "polite", "aria-label": S.trayTitle });
       document.body.appendChild(tray);
     }
     tray.innerHTML = "";
     if (resultBox) tray.appendChild(resultBox);
-    // Who is reviewing stays visible for the whole review, not only once there is something to submit.
-    var who = signedInLine();
-    if (who) tray.appendChild(who);
-    tray.hidden = !all.length && !resultBox && !who;
+    // Nothing to submit: the banner already shows who is reviewing, so no tray.
+    tray.hidden = !all.length && !resultBox;
     if (!all.length) return;
     var list = all.filter(isActive);
-    if (list.length) renderActive(list);
     var held = all.filter(isHeld);
+    if (!resultBox) tray.appendChild(trayHead(list));
+    if (list.length) renderActive(list);
     if (held.length) renderHeld(held);
     if (memPending) tray.appendChild(el("p", { class: "tr-error", role: "alert" }, [S.noStorage]));
+  }
+
+  function avatar(size) {
+    var me = load("login", null);
+    if (!me) return null;
+    return el("img", { class: "tr-tray-me", src: "https://github.com/" + encodeURIComponent(me) + ".png?size=" + size * 2, alt: "", width: String(size), height: String(size) });
+  }
+
+  // The reviewer and how much they have to submit.
+  function trayHead(list) {
+    var pages = pendingPages(list);
+    var here = list.filter(onThisPage).length;
+    var summary = pages.length > 1 ? fill(S.trayPages, { n: list.length, p: pages.length })
+      : here ? fill(S.trayHere, { n: list.length }) : fill(S.trayOther, { n: list.length });
+    return el("div", { class: "tr-tray-head" }, [
+      avatar(36),
+      el("div", { class: "tr-tray-who" }, [el("strong", {}, [S.trayTitle]), el("span", {}, [summary])]),
+    ]);
   }
 
   function pageLink(p, text) {
@@ -523,36 +593,53 @@
     ]));
   }
 
+  // One row per page: a bar of approvals (teal, as in the banner's "verified")
+  // and better translations (blue, "human translated"), with the counts.
   function renderActive(list) {
     var pages = pendingPages(list);
-    var here = list.filter(onThisPage).length;
-    if (pages.length === 1 && here) {
-      tray.appendChild(el("span", { class: "tr-tray-count" }, [fill(S.pending, { n: list.length })]));
-    } else {
-      // Changes on other pages: list them, with links back.
-      var items = pages.map(function (pg) {
-        var label = pg.title + " (" + pg.n + ")";
-        return el("li", {}, [pg.file === data.file || !pg.url
-          ? el("span", { "aria-current": pg.file === data.file ? "page" : null }, [label + (pg.file === data.file ? " · " + S.thisPage : "")])
-          : el("a", { href: pg.url + "?review=1" }, [label])]);
-      });
-      tray.appendChild(el("details", { class: "tr-tray-pages" }, [
-        el("summary", { class: "tr-tray-count" }, [fill(pages.length > 1 ? S.pendingPages : S.pending, { n: list.length, p: pages.length })]),
-        el("ul", {}, items),
-      ]));
-    }
-    var submit = el("button", { type: "button", class: "btn btn-sm btn-primary", onclick: submitAll }, [S.submit]);
+    var rows = pages.map(function (pg) {
+      var mine = list.filter(function (p) { return p.file === pg.file; });
+      var approved = mine.filter(function (p) { return p.op === "approve"; }).length;
+      var improved = mine.length - approved;
+      var current = pg.file === data.file;
+      var counts = [];
+      if (approved) counts.push(fill(S.countApproved, { n: approved }));
+      if (improved) counts.push(fill(S.countImproved, { n: improved }));
+      var bar = el("span", { class: "tr-tray-bar", "aria-hidden": "true" }, [
+        approved ? el("span", { "data-kind": "verified", style: "flex-grow:" + approved }) : null,
+        improved ? el("span", { "data-kind": "human", style: "flex-grow:" + improved }) : null,
+      ]);
+      var countLine = [counts.join(" · ")];
+      if (current && pages.length > 1) {
+        countLine.push(" · ", el("button", { type: "button", class: "tr-tray-link", onclick: function () {
+          setPendingAll(pendingAll().filter(function (p) { return !(onThisPage(p) && isActive(p)); }));
+        } }, [S.clear]));
+      }
+      return el("li", { class: current ? "tr-tray-current" : null }, [
+        el("div", { class: "tr-tray-page" }, [
+          current || !pg.url
+            ? el("span", { class: "tr-tray-title", "aria-current": current ? "page" : null }, [pg.title])
+            : el("a", { class: "tr-tray-title", href: pg.url + "?review=1" }, [pg.title]),
+          current ? el("span", { class: "tr-tray-tag" }, [S.thisPage]) : null,
+        ]),
+        bar,
+        el("span", { class: "tr-tray-counts" }, countLine),
+      ]);
+    });
+    tray.appendChild(el("ul", { class: "tr-tray-pages" }, rows));
+
+    var submit = el("button", { type: "button", class: "tr-tray-submit", onclick: submitAll }, [icon(ICON_GITHUB), el("span", {}, [S.submit])]);
     if (!data.service) submit.disabled = true;
-    tray.appendChild(submit);
-    if (pages.length > 1 && here) {
-      tray.appendChild(el("button", { type: "button", class: "btn btn-sm btn-link", onclick: function () {
-        setPendingAll(pendingAll().filter(function (p) { return !(onThisPage(p) && isActive(p)); }));
-      } }, [S.clearPage]));
-    }
-    tray.appendChild(el("button", { type: "button", class: "btn btn-sm btn-link", onclick: function () {
-      if (pages.length > 1 && !window.confirm(fill(S.clearAllConfirm, { n: list.length, p: pages.length }))) return;
-      setPendingAll(pendingAll().filter(isHeld));
-    } }, [pages.length > 1 ? S.clearAll : S.clear]));
+    tray.appendChild(el("div", { class: "tr-tray-foot" }, [
+      submit,
+      el("div", { class: "tr-tray-note" }, [
+        el("span", {}, [S.submitNote]),
+        el("button", { type: "button", class: "tr-tray-link", onclick: function () {
+          if (pages.length > 1 && !window.confirm(fill(S.clearAllConfirm, { n: list.length, p: pages.length }))) return;
+          setPendingAll(pendingAll().filter(isHeld));
+        } }, [S.clearAll]),
+      ]),
+    ]));
   }
 
   // ---- GitHub sign-in (like giscus) -----------------------------------------------
@@ -590,19 +677,19 @@
     return !data || !data.service || !!(load("login", null) && load("session", null));
   }
 
+  // Disconnecting GitHub also ends reviewer mode. Pending changes are kept and
+  // come back the next time the reader reviews and signs in.
   function signOut() {
     save("session", null);
     save("login", null);
-    close();
-    detach();
-    renderTray();
+    setMode(false);
   }
 
   // Shown instead of the review UI while signed out (sign-in cancelled, expired,
   // or signed out). Pending changes are kept and come back after signing in.
   function showSignIn() {
     if (!tray) {
-      tray = el("div", { class: "tr-tray", role: "region", "aria-live": "polite", "aria-label": S.submit });
+      tray = el("section", { class: "tr-tray", "aria-live": "polite", "aria-label": S.trayTitle });
       document.body.appendChild(tray);
     }
     tray.hidden = false;
@@ -617,15 +704,6 @@
     ]));
   }
 
-  function signedInLine() {
-    var me = load("login", null);
-    if (!me || !load("session", null)) return null;
-    return el("span", { class: "tr-signed-in" }, [
-      fill(S.signedInAs, { login: "@" + me }) + " · ",
-      el("button", { type: "button", class: "btn btn-sm btn-link p-0 align-baseline", onclick: signOut }, [S.signOut]),
-    ]);
-  }
-
   var submitting = false;
 
   // Only what the service reports as done leaves the list. Anything else
@@ -637,8 +715,13 @@
     if (!sent.length) return renderTray();
     submitting = true;
     resultBox = null;
-    tray.innerHTML = "";
-    tray.appendChild(el("span", {}, ["…"]));
+    // Keep the card; only the button changes while the pull request opens.
+    var button = tray.querySelector(".tr-tray-submit");
+    if (button) {
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      button.lastChild.textContent = S.submitting;
+    }
     fetch(serviceUrl("/api/submit"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + load("session", "") },
@@ -699,11 +782,24 @@
     setPendingAll(next);
   }
 
+  // A thank-you with the pull request; "Keep reviewing" puts the tray away.
   function showResult(r) {
+    var me = load("login", null);
+    var parts = String(S.submittedBody).split("{pr}");
+    var body = [parts[0], el("a", { href: r.pr.url, target: "_blank", rel: "noopener" }, ["#" + r.pr.number])];
+    if (parts.length > 1) body.push(parts[1]);
     resultBox = el("div", { class: "tr-result" }, [
-      el("strong", {}, [S.submitted + " "]),
-      el("a", { href: r.pr.url, target: "_blank", rel: "noopener" }, ["#" + r.pr.number + " " + r.pr.title]),
-      el("button", { type: "button", class: "btn btn-sm btn-link", onclick: function () { resultBox = null; renderTray(); } }, [S.close]),
+      el("div", { class: "tr-tray-head" }, [
+        avatar(36),
+        el("div", { class: "tr-tray-who" }, [
+          el("strong", {}, [me ? fill(S.submittedThanks, { login: "@" + me }) : S.submitted]),
+          el("span", {}, body),
+        ]),
+      ]),
+      el("div", { class: "tr-tray-foot tr-tray-foot-row" }, [
+        el("a", { class: "tr-tray-submit", href: r.pr.url, target: "_blank", rel: "noopener" }, [icon(ICON_GITHUB), el("span", {}, [S.viewOnGitHub])]),
+        el("button", { type: "button", class: "tr-tray-quiet", onclick: function () { resultBox = null; renderTray(); } }, [S.keepReviewing]),
+      ]),
     ]);
     renderTray();
   }
@@ -717,10 +813,12 @@
       updateToggleText();
       if (!signedIn()) {
         if (fromClick) return window.location.assign(signInHref());
+        updateBanner();
         return renderTray();
       }
       attach();
       renderTray();
+      updateBanner();
     };
     if (data) return go();
     fetch(DATA_URL)
@@ -742,6 +840,7 @@
     document.body.classList.remove("tr-review-on");
     if (tray) tray.hidden = true;
     updateToggleText();
+    updateBanner();
   }
 
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") close(); });
