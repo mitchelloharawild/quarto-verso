@@ -1,5 +1,5 @@
-// Old source text from git history, for stale units of parallel storage (whose
-// tracking files keep only the source hash). Best effort: outside a git
+// Old source text from git history, for stale units of translated documents
+// (whose tracking files keep only the source hash). Best effort: outside a git
 // repository, or when no commit holds the text, nothing is found.
 
 import { execFileSync } from 'node:child_process';

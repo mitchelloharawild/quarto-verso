@@ -41,7 +41,11 @@ export interface Origin {
   date: string;
 }
 
-/** One entry in a translation file. */
+/**
+ * One unit of a translation. In memory every translation is a TFile; on disk a
+ * document's translation is a translated copy plus a tracking file (tdoc.ts),
+ * and the project file's is a YAML translation file (tfile.ts).
+ */
 export interface TUnit {
   id: string;
   kind: UnitKind;
@@ -103,12 +107,6 @@ export interface TranslateConfig {
   'on-render'?: 'off' | 'missing' | 'stale';
   'max-cost'?: number;
   'on-stale'?: 'source' | 'previous';
-  /**
-   * Where translations live. `yaml` (default): text in the translation
-   * files. `parallel` (prototype): a translated copy of each document plus a
-   * tracking file with ids, hashes and reviews.
-   */
-  storage?: 'yaml' | 'parallel';
   /** Pages with a smaller translated share are published with noindex. Default 0.5. */
   'min-coverage'?: number;
   review?: {

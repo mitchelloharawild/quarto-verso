@@ -2,8 +2,8 @@
 // PR service (before committing) and CI (`i18n check --pr`) run.
 
 import { isPlainText, parseLangGlossary } from './glossary.ts';
-import { outsideUnits, parseTrack, readParallel } from './parallel.ts';
 import { syncUnits } from './sync.ts';
+import { outsideUnits, parseTrack, readDoc } from './tdoc.ts';
 import { knownPart, parseTFile, stringifyTFile, unknownKeys } from './tfile.ts';
 import { normaliseBlockText, normaliseCode, validate, type Candidate } from './validate.ts';
 import type { MarkdownAdapter, SourceUnit, SyncedUnit, TFile, TUnit } from './types.ts';
@@ -92,11 +92,11 @@ export interface ContribContext {
   units(sourceFile: string): Promise<SourceUnit[] | null>;
   md: MarkdownAdapter;
   /**
-   * Parallel storage: reads a file (path in the repo) that the PR did
-   * not change, from the base branch. Translated documents and their tracking
-   * files are then checked together as one translation.
+   * Reads a file (path in the repo) that the PR did not change, from the base
+   * branch: a translated document and its tracking file are checked together
+   * even when the PR changed only one of them.
    */
-  readUnchanged?: (path: string) => string | undefined;
+  readUnchanged: (path: string) => string | undefined;
 }
 
 export const CHECK_NAMES = [
@@ -117,7 +117,7 @@ export async function checkContribution(base: Map<string, string>, head: Map<str
     res[n - 1].messages.push(m);
   };
   const esc = ctx.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (ctx.readUnchanged) ({ base, head, changed } = await expandParallel(base, head, changed, ctx, esc, fail));
+  ({ base, head, changed } = await expandDocs(base, head, changed, ctx, esc, fail));
   const allowed = new RegExp(`^${esc}_i18n/([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/(?!_freeze/|build/)[^\\0]+\\.yml$`);
 
   // 1. Paths and branch.
@@ -228,13 +228,14 @@ export async function checkContribution(base: Map<string, string>, head: Map<str
 }
 
 /**
- * Parallel storage: replace each changed translated document and tracking file
- * by one virtual translation file (text from the document, the rest from the
- * tracking file), so checks 2–7 run unchanged. Adds the checks only this
- * storage needs: the document keeps its structure, nothing outside the units
- * changes, and every text change is recorded in the tracking file.
+ * Replace each changed translated document and tracking file by one virtual
+ * translation file (text from the document, the rest from the tracking file),
+ * so checks 2–7 run on the same form as the project file's translation. Adds
+ * the checks only documents need: the document keeps its structure, nothing
+ * outside the units changes, and every text change is recorded in the
+ * tracking file.
  */
-async function expandParallel(base: Map<string, string>, head: Map<string, string>, changed: string[], ctx: ContribContext, esc: string, fail: (n: number, m: string) => void) {
+async function expandDocs(base: Map<string, string>, head: Map<string, string>, changed: string[], ctx: ContribContext, esc: string, fail: (n: number, m: string) => void) {
   const doc = new RegExp(`^${esc}_i18n/[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*/(?!_freeze/|build/)[^\\0]+\\.(?:qmd|md)$`);
   const groups = new Set<string>();
   const rest: string[] = [];
@@ -246,7 +247,7 @@ async function expandParallel(base: Map<string, string>, head: Map<string, strin
   if (!groups.size) return { base, head, changed };
   const b2 = new Map(base);
   const h2 = new Map(head);
-  const side = (m: Map<string, string>, p: string) => (m.has(p) ? m.get(p) : changed.includes(p) ? undefined : ctx.readUnchanged!(p));
+  const side = (m: Map<string, string>, p: string) => (m.has(p) ? m.get(p) : changed.includes(p) ? undefined : ctx.readUnchanged(p));
   for (const track of groups) {
     const docPath = track.slice(0, -4);
     for (const p of [docPath, track]) {
@@ -264,7 +265,7 @@ async function expandParallel(base: Map<string, string>, head: Map<string, strin
     }
     let a, b;
     try {
-      [a, b] = await Promise.all([readParallel(bd, parseTrack(bt), ctx.md), readParallel(hd, parseTrack(ht), ctx.md)]);
+      [a, b] = await Promise.all([readDoc(bd, parseTrack(bt), ctx.md), readDoc(hd, parseTrack(ht), ctx.md)]);
     } catch (e) {
       fail(2, `${track}: ${(e as Error).message}`);
       continue;

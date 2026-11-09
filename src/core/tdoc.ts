@@ -1,16 +1,16 @@
-// Parallel storage: each language keeps a translated copy of
-// every source document (`_i18n/<lang>/<file>`) next to a tracking file
+// Translated documents: each language keeps a translated copy of every source
+// document (`_i18n/<lang>/<file>`) next to a tracking file
 // (`_i18n/<lang>/<file>.yml`) that identifies its units and holds hashes and
 // reviews, but no text.
 //
 // The rest of the tool works on the in-memory TFile, so this module only
 // converts in both directions:
 //
-//   readParallel:  translated document + tracking file → TFile
-//   writeParallel: current source + TFile             → translated document + tracking file
+//   readDoc:  translated document + tracking file → TFile
+//   writeDoc: current source + TFile             → translated document + tracking file
 //
 // Matching is positional: the n-th unit of the translated document is the n-th
-// unit of the tracking file, which `writeParallel` guarantees and `readParallel`
+// unit of the tracking file, which `writeDoc` guarantees and `readDoc`
 // verifies (kind, cell, option or field, section). The tracking file is then
 // aligned with the current source by the usual sync (sync.ts), so source edits
 // never need guesswork. Everything outside units (cell options, attributes,
@@ -60,7 +60,6 @@ export function parseTrack(text: string): TrackFile {
   if (!data || typeof data !== 'object' || !Array.isArray(data.units)) throw new Error('not a tracking file (missing units)');
   for (const u of data.units) {
     if (typeof u.id !== 'string' || typeof u['source-hash'] !== 'string') throw new Error('unit without id or source-hash');
-    delete (u as any).source; // older tracking files kept a source snapshot
     if ('text' in u) throw new Error(`${u.id}: tracking files hold no text (the translation is in the .qmd)`);
     u['source-hash'] = String(u['source-hash']);
     if (u['text-hash'] !== undefined) u['text-hash'] = String(u['text-hash']);
@@ -83,7 +82,7 @@ export function stringifyTrack(t: TrackFile, docPath: string): string {
 
 // ---- read -----------------------------------------------------------------------
 
-export interface ParallelIssue {
+export interface DocIssue {
   /** `structure`: the document no longer matches the tracking file, so no unit can be used. */
   kind: 'structure' | 'untracked' | 'document';
   id?: string;
@@ -91,7 +90,7 @@ export interface ParallelIssue {
   message: string;
 }
 
-export interface ParallelRead {
+export interface DocRead {
   /**
    * The translation file as stored: text from the document, everything else from
    * the tracking file. Units in `untracked` keep their recorded reviews here (the
@@ -105,14 +104,14 @@ export interface ParallelRead {
   raw: Map<string, string>;
   /** Document units with positions, in order (only when the structure matches). */
   docUnits?: SourceUnit[];
-  issues: ParallelIssue[];
+  issues: DocIssue[];
 }
 
 const sig = (u: { kind: string; cell?: string; field?: string; section?: string }) =>
   [u.kind, u.cell ?? '', u.field ?? '', u.section ?? ''].join('|');
 
-export async function readParallel(doc: string, track: TrackFile, md: MarkdownAdapter): Promise<ParallelRead> {
-  const issues: ParallelIssue[] = [];
+export async function readDoc(doc: string, track: TrackFile, md: MarkdownAdapter): Promise<DocRead> {
+  const issues: DocIssue[] = [];
   const untracked = new Set<string>();
   const raw = new Map<string, string>();
   const ex = await extractUnits(doc, md);
@@ -205,7 +204,7 @@ function describeMismatch(d: SourceUnit[], t: TrackUnit[], i: number): string {
  * Display policy: an edit not recorded in the tracking file is a translation by
  * an unknown person, so earlier reviews (of a different text) do not count.
  */
-export function withPolicy(r: ParallelRead): TFile {
+export function withPolicy(r: DocRead): TFile {
   return {
     ...r.tfile,
     units: r.tfile.units.map((u) => (r.untracked.has(u.id) ? { ...u, origin: { by: 'unknown', date: '' }, reviews: [] } : u)),
@@ -214,7 +213,7 @@ export function withPolicy(r: ParallelRead): TFile {
 
 // ---- write ----------------------------------------------------------------------
 
-export interface ParallelWrite {
+export interface DocWrite {
   doc: string;
   track: TrackFile;
 }
@@ -225,7 +224,7 @@ export interface ParallelWrite {
  * there is none. Structure, options and attributes always come from the source,
  * so the document is block-for-block parallel to the tracking file written with it.
  */
-export function writeParallel(file: string, sourceText: string, srcUnits: SourceUnit[], tfile: TFile, raw?: Map<string, string>): ParallelWrite {
+export function writeDoc(file: string, sourceText: string, srcUnits: SourceUnit[], tfile: TFile, raw?: Map<string, string>): DocWrite {
   const synced = syncUnits(file, srcUnits, tfile);
   const edits: { start: number; end: number; text: string }[] = [];
   const meta: { path: (string | number)[]; value: string }[] = [];

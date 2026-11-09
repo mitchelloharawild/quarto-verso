@@ -241,7 +241,7 @@ export async function applyWork(p: Project, file: string, log: Log, answersFile?
       tfile.units[k] = translatedUnit(c.u, c.src.kind === 'code' ? normaliseCode(c.text!) : c.text!, origin, terms);
       res.applied++;
     }
-    await p.saveTFile(tfile, st.parallel?.raw);
+    await p.saveTFile(tfile, st.doc?.raw);
   }
   log(`${lang}: applied ${res.applied} units and ${res.glossary} glossary entries; ${res.rejected.length} rejected; ${res.skipped.length} skipped`);
   return res;

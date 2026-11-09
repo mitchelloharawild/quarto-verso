@@ -141,16 +141,19 @@ test('contributions: unit operations and the PR checks', async () => {
   const e = applyOps(r.tfile, s1, [{ op: 'replace', id, text: 'Premier paragraphe avec `code` et @fig-x.' }], 'gh:carol', '2026-11-11');
   assert.deepEqual(e.tfile.units[2].reviews!.map((x) => x.by), ['gh:carol']);
 
-  const base = new Map([['_i18n/fr/a.qmd.yml', stringifyTFile(t)]]);
-  const ctx = { prefix: '', md, units: async () => units };
-  const good = await checkContribution(base, new Map([['_i18n/fr/a.qmd.yml', stringifyTFile(e.tfile)]]), ['_i18n/fr/a.qmd.yml'], { ...ctx, author: 'gh:carol', branch: 'i18n/carol/x' });
+  // The YAML form of a translation, as stored for the project file; documents
+  // are checked through the same path after reading (tdoc.test.ts).
+  const P = '_i18n/fr/_project.yml';
+  const base = new Map([[P, stringifyTFile(t)]]);
+  const ctx = { prefix: '', md, units: async () => units, readUnchanged: () => undefined };
+  const good = await checkContribution(base, new Map([[P, stringifyTFile(e.tfile)]]), [P], { ...ctx, author: 'gh:carol', branch: 'i18n/carol/x' });
   assert.ok(good.every((c) => c.ok), JSON.stringify(good.filter((c) => !c.ok)));
-  const wrongAuthor = await checkContribution(base, new Map([['_i18n/fr/a.qmd.yml', stringifyTFile(e.tfile)]]), ['_i18n/fr/a.qmd.yml'], { ...ctx, author: 'gh:mallory' });
+  const wrongAuthor = await checkContribution(base, new Map([[P, stringifyTFile(e.tfile)]]), [P], { ...ctx, author: 'gh:mallory' });
   assert.equal(wrongAuthor.find((c) => c.check === 4)!.ok, false);
   // A code change passes the structural checks but is flagged for the maintainer.
   const cid = s1.find((u) => u.src.kind === 'code')!.id;
   const c = applyOps(t, s1, [{ op: 'replace', id: cid, text: '# Dessiner\nplot(2, main = "Titre")' }], 'gh:carol', '2026-11-11');
-  const codeRes = await checkContribution(base, new Map([['_i18n/fr/a.qmd.yml', stringifyTFile(c.tfile)]]), ['_i18n/fr/a.qmd.yml'], { ...ctx, author: 'gh:carol' });
+  const codeRes = await checkContribution(base, new Map([[P, stringifyTFile(c.tfile)]]), [P], { ...ctx, author: 'gh:carol' });
   assert.ok(codeRes.every((x) => x.ok));
   assert.equal(codeRes[6].attention!.length, 1);
   const otherFile = await checkContribution(base, new Map([['a.qmd', 'x']]), ['a.qmd'], { ...ctx, author: 'gh:carol' });
@@ -161,12 +164,12 @@ test('contributions: unit operations and the PR checks', async () => {
   // adding one does.
   const withLeftover = (tf: typeof t) => stringifyTFile(tf).replace(`- id: ${s1[0].id}\n`, `- id: ${s1[0].id}\n    spans: [{ kind: comment }]\n`);
   assert.match(withLeftover(t), /spans:/);
-  const oldBase = new Map([['_i18n/fr/a.qmd.yml', withLeftover(t)]]);
+  const oldBase = new Map([[P, withLeftover(t)]]);
   for (const head of [withLeftover(e.tfile), stringifyTFile(e.tfile)]) {
-    const r2 = await checkContribution(oldBase, new Map([['_i18n/fr/a.qmd.yml', head]]), ['_i18n/fr/a.qmd.yml'], { ...ctx, author: 'gh:carol' });
+    const r2 = await checkContribution(oldBase, new Map([[P, head]]), [P], { ...ctx, author: 'gh:carol' });
     assert.ok(r2.every((x) => x.ok), JSON.stringify(r2.filter((x) => !x.ok)));
   }
-  const added = await checkContribution(base, new Map([['_i18n/fr/a.qmd.yml', withLeftover(e.tfile)]]), ['_i18n/fr/a.qmd.yml'], { ...ctx, author: 'gh:carol' });
+  const added = await checkContribution(base, new Map([[P, withLeftover(e.tfile)]]), [P], { ...ctx, author: 'gh:carol' });
   assert.equal(added.find((x) => x.check === 2)!.ok, false);
   // Resubmitting the same work is reported as already done, not lost.
   const again = applyOps(e.tfile, s1, [{ op: 'replace', id, text: 'Premier paragraphe avec `code` et @fig-x.' }, { op: 'approve', id }], 'gh:carol', '2026-11-11');

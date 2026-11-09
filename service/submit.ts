@@ -72,12 +72,12 @@ async function applyAll(site: Site, lang: string, ops: FileOp[], login: string, 
     }
     const stored = p.storedPaths(lang, file);
     const fromBranch = stored.some((r) => startFrom[site.prefix + r] !== undefined);
-    const from = fromBranch ? await p.loadTFile(lang, file, (r) => startFrom[site.prefix + r] ?? site.read(site.prefix + r)) : { tfile: st.tfile, parallel: st.parallel };
+    const from = fromBranch ? await p.loadTFile(lang, file, (r) => startFrom[site.prefix + r] ?? site.read(site.prefix + r)) : { tfile: st.tfile, doc: st.doc };
     const res = applyOps(from.tfile!, st.synced, fops, `gh:${login}`, date);
     for (const d of res.dropped) dropped.push({ file, ...d });
     if (!res.applied.length) continue;
     applied.push(...res.applied.map((op) => ({ ...op, file })));
-    for (const [r, content] of Object.entries(await p.serialise(res.tfile, from.parallel?.raw))) {
+    for (const [r, content] of Object.entries(await p.serialise(res.tfile, from.doc?.raw))) {
       const k = site.prefix + r;
       if (content === site.read(k) && startFrom[k] === undefined) continue;
       head[k] = content;
@@ -92,7 +92,7 @@ function runChecks(site: Site, login: string, branch: string, head: Record<strin
   const base = new Map(changed.flatMap((f) => (site.read(f) === undefined ? [] : [[f, site.read(f)!] as [string, string]])));
   return checkContribution(base, new Map(Object.entries(head)), changed, {
     author: `gh:${login}`, branch, prefix: site.prefix, md: p.md,
-    readUnchanged: p.storage === 'parallel' ? (f) => site.read(f) : undefined,
+    readUnchanged: (f) => site.read(f),
     units: async (f) => (f === PROJECT_FILE || p.sources().includes(f) ? (await p.units(f)).units : null),
   });
 }

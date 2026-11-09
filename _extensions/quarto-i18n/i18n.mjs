@@ -8366,7 +8366,7 @@ function isPlainText(s) {
   return !/[<>`{}[\]$\\*_|]/.test(s) && !/\n/.test(s);
 }
 
-// src/core/parallel.ts
+// src/core/tdoc.ts
 var import_yaml5 = __toESM(require_dist(), 1);
 
 // src/core/units.ts
@@ -8648,7 +8648,7 @@ function projectUnits(config) {
   return projectFields(config).map((f) => ({ kind: "meta", field: f.path.join("."), source: f.value, hash: textHash(f.value) }));
 }
 
-// src/core/parallel.ts
+// src/core/tdoc.ts
 var TRACK_KEYS = ["id", "kind", "section", "cell", "field", "source-hash", "text-hash", "terms", "origin", "reviews"];
 function normaliseText(kind, s) {
   return kind === "code" ? normaliseCode(s) : normaliseBlockText(s);
@@ -8666,7 +8666,6 @@ function parseTrack(text) {
   if (!data || typeof data !== "object" || !Array.isArray(data.units)) throw new Error("not a tracking file (missing units)");
   for (const u of data.units) {
     if (typeof u.id !== "string" || typeof u["source-hash"] !== "string") throw new Error("unit without id or source-hash");
-    delete u.source;
     if ("text" in u) throw new Error(`${u.id}: tracking files hold no text (the translation is in the .qmd)`);
     u["source-hash"] = String(u["source-hash"]);
     if (u["text-hash"] !== void 0) u["text-hash"] = String(u["text-hash"]);
@@ -8686,7 +8685,7 @@ function stringifyTrack(t, docPath) {
   return doc.toString({ lineWidth: 0, defaultKeyType: "PLAIN", singleQuote: false });
 }
 var sig = (u) => [u.kind, u.cell ?? "", u.field ?? "", u.section ?? ""].join("|");
-async function readParallel(doc, track, md) {
+async function readDoc(doc, track, md) {
   const issues = [];
   const untracked = /* @__PURE__ */ new Set();
   const raw = /* @__PURE__ */ new Map();
@@ -8766,7 +8765,7 @@ function withPolicy(r) {
     units: r.tfile.units.map((u) => r.untracked.has(u.id) ? { ...u, origin: { by: "unknown", date: "" }, reviews: [] } : u)
   };
 }
-function writeParallel(file, sourceText, srcUnits, tfile, raw) {
+function writeDoc(file, sourceText, srcUnits, tfile, raw) {
   const synced = syncUnits(file, srcUnits, tfile);
   const edits = [];
   const meta = [];
@@ -8871,14 +8870,14 @@ var Project = class {
   extDir;
   unitCache = /* @__PURE__ */ new Map();
   historyCache = /* @__PURE__ */ new Map();
-  constructor(root, opts = {}) {
+  constructor(root) {
     this.root = path2.resolve(root);
     const cfgPath = path2.join(this.root, PROJECT_FILE);
     if (!fs2.existsSync(cfgPath)) throw new Error(`no ${PROJECT_FILE} in ${this.root}`);
     this.config = (0, import_yaml6.parse)(fs2.readFileSync(cfgPath, "utf8")) ?? {};
     const tc = this.config.translate;
     if (!tc || !tc.source || !Array.isArray(tc.targets)) throw new Error(`${PROJECT_FILE}: translate.source and translate.targets are required`);
-    this.tc = opts.storage ? { ...tc, storage: opts.storage } : tc;
+    this.tc = tc;
     this.extDir = extensionDir();
     this.md = pandocMarkdown();
   }
@@ -8922,24 +8921,20 @@ var Project = class {
   tfilePath(lang, file) {
     return path2.join(this.i18nDir, lang, file === PROJECT_FILE ? PROJECT_TFILE : `${file}.yml`);
   }
-  get storage() {
-    return this.tc.storage === "parallel" ? "parallel" : "yaml";
-  }
-  /** Parallel storage keeps documents as translated copies; the project file stays YAML. */
-  isParallel(file) {
-    return this.storage === "parallel" && file !== PROJECT_FILE;
-  }
-  /** The translated copy of a document (parallel storage). */
+  /** The translated copy of a document. */
   docPath(lang, file) {
     return path2.join(this.i18nDir, lang, file);
   }
   rel(abs) {
     return path2.relative(this.root, abs).split(path2.sep).join("/");
   }
-  /** The files that hold a document's translation, relative to the root. */
+  /**
+   * The files that hold a translation, relative to the root: the translated
+   * document and its tracking file, or the project file's translation file.
+   */
   storedPaths(lang, file) {
     const track = this.rel(this.tfilePath(lang, file));
-    return this.isParallel(file) ? [this.rel(this.docPath(lang, file)), track] : [track];
+    return file === PROJECT_FILE ? [track] : [this.rel(this.docPath(lang, file)), track];
   }
   disk = (rel2) => {
     const p = path2.join(this.root, rel2);
@@ -8947,43 +8942,41 @@ var Project = class {
   };
   /**
    * The translation of one document as stored, from disk or from another
-   * version of the files (`get`, e.g. a PR branch). Parallel storage also
-   * returns how the document was read.
+   * version of the files (`get`, e.g. a PR branch). For a document, also how
+   * the translated copy was read.
    */
   async loadTFile(lang, file, get = this.disk) {
-    const [first, second] = this.storedPaths(lang, file);
+    const paths = this.storedPaths(lang, file);
+    const track = paths[paths.length - 1];
     try {
-      if (!this.isParallel(file)) {
-        const t = get(first);
-        return { tfile: t === void 0 ? void 0 : parseTFile(t) };
-      }
-      const doc = get(first);
-      const track = get(second);
-      if (track === void 0) return {};
-      if (doc === void 0) throw new Error(`${first} is missing (its tracking file exists)`);
-      const r = await readParallel(doc, parseTrack(track), this.md);
-      return { tfile: withPolicy(r), parallel: r };
+      const t = get(track);
+      if (t === void 0) return {};
+      if (file === PROJECT_FILE) return { tfile: parseTFile(t) };
+      const doc = get(paths[0]);
+      if (doc === void 0) throw new Error(`${paths[0]} is missing (its tracking file exists)`);
+      const r = await readDoc(doc, parseTrack(t), this.md);
+      return { tfile: withPolicy(r), doc: r };
     } catch (e) {
-      throw new Error(`${this.isParallel(file) ? second : first}: ${e.message}`);
+      throw new Error(`${track}: ${e.message}`);
     }
   }
   /** The stored form of a translation: path (relative to the root) → content. */
   async serialise(t, raw) {
     const paths = this.storedPaths(t.lang, t.source);
-    if (!this.isParallel(t.source)) return { [paths[0]]: stringifyTFile(t) };
+    if (t.source === PROJECT_FILE) return { [paths[0]]: stringifyTFile(t) };
     const { units } = await this.units(t.source);
-    const w = writeParallel(t.source, this.readSource(t.source), units, t, raw);
+    const w = writeDoc(t.source, this.readSource(t.source), units, t, raw);
     return { [paths[0]]: w.doc, [paths[1]]: stringifyTrack(w.track, path2.posix.basename(paths[0])) };
   }
   /**
-   * Write a translation. With parallel storage, a translated document whose
-   * structure no longer matches its tracking file is never overwritten (its
-   * translations could not be carried over) unless `reset` is set.
+   * Write a translation. A translated document whose structure no longer
+   * matches its tracking file is never overwritten (its translations could not
+   * be carried over) unless `reset` is set.
    */
   async saveTFile(t, raw, opts = {}) {
-    if (this.isParallel(t.source) && !opts.reset) {
+    if (t.source !== PROJECT_FILE && !opts.reset) {
       const cur = await this.loadTFile(t.lang, t.source);
-      const bad = cur.parallel?.issues.find((i) => i.kind === "structure");
+      const bad = cur.doc?.issues.find((i) => i.kind === "structure");
       if (bad) throw new Error(`${this.storedPaths(t.lang, t.source)[0]}: not written, ${bad.message}`);
     }
     for (const [rel2, content] of Object.entries(await this.serialise(t, raw))) {
@@ -9025,10 +9018,10 @@ var Project = class {
   }
   async state(lang, file) {
     const { units, issues } = await this.units(file);
-    const { tfile, parallel } = await this.loadTFile(lang, file);
+    const { tfile, doc } = await this.loadTFile(lang, file);
     const synced = syncUnits(file, units, tfile, { termHashes: termHashes(this.glossary(), this.langGlossary(lang)) });
-    if (parallel) await this.recoverSources(file, synced);
-    return { file, units, synced, tfile, issues, parallel };
+    if (doc) await this.recoverSources(file, synced);
+    return { file, units, synced, tfile, issues, doc };
   }
   /**
    * Tracking files keep no source text; stale translations get their old source
@@ -9198,7 +9191,7 @@ async function buildLanguage(p, lang, log2) {
   const statsOf = /* @__PURE__ */ new Map();
   const proj = materialise("", projState.synced, { lang, sourceLang: p.tc.source, onStale, rejected: forFile(rejected, PROJECT_FILE) });
   fs3.writeFileSync(path3.join(mirror, PROJECT_FILE), mirrorConfig(p, lang, proj));
-  const writeDoc = async (st) => {
+  const writeDoc2 = async (st) => {
     const text = p.readSource(st.file);
     const page = pageOf(st.file);
     const rej = forFile(rejected, st.file);
@@ -9215,7 +9208,7 @@ async function buildLanguage(p, lang, log2) {
       if (documentShape(a.blocks) !== documentShape(b.blocks)) {
         log2(`warning: ${st.file}: structure differs from the source after translation; showing the source`);
         structureFallback.add(st.file);
-        return writeDoc(st);
+        return writeDoc2(st);
       }
     }
     fs3.mkdirSync(path3.dirname(path3.join(mirror, st.file)), { recursive: true });
@@ -9223,7 +9216,7 @@ async function buildLanguage(p, lang, log2) {
     results.set(st.file, m);
     statsOf.set(st.file, stats);
   };
-  for (const st of states) await writeDoc(st);
+  for (const st of states) await writeDoc2(st);
   for (let attempt = 0; ; attempt++) {
     log2(`rendering ${path3.relative(p.root, mirror)}`);
     const r = await renderProject(mirror, (l) => {
@@ -9241,7 +9234,7 @@ ${lines.slice(-15).join("\n")}`);
     }
     log2(`cell ${fc.label} in ${st.file} failed in ${lang}; reverting it to the source and retrying`);
     reverted.add(key);
-    await writeDoc(st);
+    await writeDoc2(st);
   }
   const built = path3.join(mirror, path3.basename(p.outputDir));
   const dest = path3.join(p.outputDir, lang);
@@ -9393,7 +9386,7 @@ async function checkContribution(base, head, changed, ctx) {
     res[n - 1].messages.push(m);
   };
   const esc = ctx.prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (ctx.readUnchanged) ({ base, head, changed } = await expandParallel(base, head, changed, ctx, esc, fail));
+  ({ base, head, changed } = await expandDocs(base, head, changed, ctx, esc, fail));
   const allowed = new RegExp(`^${esc}_i18n/([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/(?!_freeze/|build/)[^\\0]+\\.yml$`);
   if (ctx.branch !== void 0 && !ctx.branch.startsWith("i18n/")) fail(1, `branch ${ctx.branch} is not under i18n/`);
   const files = [];
@@ -9488,7 +9481,7 @@ async function checkContribution(base, head, changed, ctx) {
   }
   return res;
 }
-async function expandParallel(base, head, changed, ctx, esc, fail) {
+async function expandDocs(base, head, changed, ctx, esc, fail) {
   const doc = new RegExp(`^${esc}_i18n/[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*/(?!_freeze/|build/)[^\\0]+\\.(?:qmd|md)$`);
   const groups = /* @__PURE__ */ new Set();
   const rest = [];
@@ -9518,7 +9511,7 @@ async function expandParallel(base, head, changed, ctx, esc, fail) {
     }
     let a, b;
     try {
-      [a, b] = await Promise.all([readParallel(bd, parseTrack(bt), ctx.md), readParallel(hd, parseTrack(ht), ctx.md)]);
+      [a, b] = await Promise.all([readDoc(bd, parseTrack(bt), ctx.md), readDoc(hd, parseTrack(ht), ctx.md)]);
     } catch (e) {
       fail(2, `${track}: ${e.message}`);
       continue;
@@ -9626,11 +9619,11 @@ async function checkProject(p, langs) {
     let stale = 0;
     let missing = 0;
     for (const st of states) {
-      for (const i of st.parallel?.issues ?? []) {
+      for (const i of st.doc?.issues ?? []) {
         const where = `${lang} ${p.storedPaths(lang, st.file)[0]}${i.id ? "#" + i.id : i.line ? ":" + i.line : ""}`;
         out.push({ level: i.kind === "untracked" ? "warning" : "error", where, message: i.kind === "structure" ? `${i.message} Until then the units in between show the source.` : i.message });
       }
-      for (const u of st.parallel ? [] : st.tfile?.units ?? []) {
+      for (const u of st.doc ? [] : st.tfile?.units ?? []) {
         const extra = unknownKeys(u);
         if (extra.length) out.push({ level: "warning", where: `${lang} ${st.file}#${u.id}`, message: `unknown keys ${extra.join(", ")} in the translation file (left by another version; \`i18n translate\` removes them)` });
       }
@@ -9686,7 +9679,7 @@ async function checkPr(p, pr, prefix) {
     branch: pr.branch,
     prefix,
     md: p.md,
-    readUnchanged: p.storage !== "parallel" ? void 0 : pr.readUnchanged,
+    readUnchanged: pr.readUnchanged,
     units: async (file) => {
       if (file !== PROJECT_FILE && !p.sources().includes(file)) return null;
       return (await p.units(file)).units;
@@ -9701,20 +9694,19 @@ function formatChecks(res) {
   }).join("\n");
 }
 
-// src/cli/storage.ts
+// src/cli/sync.ts
 import fs5 from "node:fs";
 import path5 from "node:path";
-async function syncParallel(p, langs, opts, log2) {
-  if (p.storage !== "parallel") throw new Error("sync is for parallel storage (translate.storage: parallel)");
+async function syncDocs(p, langs, opts, log2) {
   const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const by = opts.by ? opts.by.includes(":") ? opts.by : `gh:${opts.by}` : void 0;
   const out = [];
   for (const lang of langs) {
     for (const file of p.sources()) {
       const st = await p.state(lang, file);
-      if (!st.tfile || !st.parallel) continue;
+      if (!st.tfile || !st.doc) continue;
       const res = { file, lang, recorded: [], changed: false };
-      const structure = st.parallel.issues.find((i) => i.kind === "structure");
+      const structure = st.doc.issues.find((i) => i.kind === "structure");
       if (structure && !opts.reset) {
         res.error = structure.message;
         out.push(res);
@@ -9722,14 +9714,14 @@ async function syncParallel(p, langs, opts, log2) {
       }
       const tfile = structuredClone(st.tfile);
       for (const u of tfile.units) {
-        if (!st.parallel.untracked.has(u.id)) continue;
+        if (!st.doc.untracked.has(u.id)) continue;
         u.origin = { by: by ?? "unknown", date };
         u.reviews = by ? [{ by, date }] : [];
         delete u.terms;
         res.recorded.push(u.id);
       }
       const before = p.storedPaths(lang, file).map((r) => readOr(p, r));
-      await p.saveTFile(tfile, st.parallel.raw, { reset: opts.reset });
+      await p.saveTFile(tfile, st.doc.raw, { reset: opts.reset });
       const after = p.storedPaths(lang, file).map((r) => readOr(p, r));
       res.changed = before.some((b, i) => b !== after[i]);
       if (res.changed || res.recorded.length) log2(`${lang} ${file}: ${res.recorded.length ? `recorded ${res.recorded.length} edited units` : "updated from the source"}`);
@@ -9741,40 +9733,6 @@ async function syncParallel(p, langs, opts, log2) {
 function readOr(p, rel2) {
   const f = path5.join(p.root, rel2);
   return fs5.existsSync(f) ? fs5.readFileSync(f, "utf8") : "";
-}
-async function fillSources(p, file, tfile) {
-  const current = new Map((await p.units(file)).units.map((u) => [u.hash, u.source]));
-  const need = tfile.units.filter((u) => u.text && u.source === void 0);
-  const old = await sourcesFromHistory(p.root, file, new Set(need.map((u) => u["source-hash"]).filter((h) => !current.has(h))), p.md);
-  for (const u of need) {
-    const s = current.get(u["source-hash"]) ?? old.get(u["source-hash"]);
-    if (s !== void 0) u.source = s;
-  }
-}
-async function migrate(root, to, log2) {
-  const from = new Project(root);
-  if (from.storage === to) throw new Error(`translate.storage is already ${to}`);
-  const target = new Project(root, { storage: to });
-  let n = 0;
-  for (const lang of from.languages()) {
-    for (const file of from.sources()) {
-      const { tfile, parallel } = await from.loadTFile(lang, file);
-      if (!tfile) continue;
-      if (parallel?.issues.some((i) => i.kind === "structure")) throw new Error(`${from.storedPaths(lang, file)[0]}: fix its structure first (i18n check)`);
-      if (to === "yaml") await fillSources(from, file, tfile);
-      const old = from.storedPaths(lang, file);
-      await target.saveTFile(tfile, parallel?.raw, { reset: true });
-      const now = new Set(target.storedPaths(lang, file));
-      for (const r of old) if (!now.has(r)) fs5.rmSync(path5.join(root, r), { force: true });
-      n++;
-    }
-  }
-  const doc = from.configDocument();
-  if (to === "yaml") doc.deleteIn(["translate", "storage"]);
-  else doc.setIn(["translate", "storage"], to);
-  fs5.writeFileSync(path5.join(root, PROJECT_FILE), doc.toString({ lineWidth: 0 }));
-  log2(`converted ${n} translations to ${to} storage; set translate.storage in ${PROJECT_FILE}`);
-  return n;
 }
 
 // src/cli/translate.ts
@@ -9954,7 +9912,7 @@ async function applyWork(p, file, log2, answersFile) {
       tfile.units[k] = translatedUnit(c.u, c.src.kind === "code" ? normaliseCode(c.text) : c.text, origin, terms);
       res.applied++;
     }
-    await p.saveTFile(tfile, st.parallel?.raw);
+    await p.saveTFile(tfile, st.doc?.raw);
   }
   log2(`${lang}: applied ${res.applied} units and ${res.glossary} glossary entries; ${res.rejected.length} rejected; ${res.skipped.length} skipped`);
   return res;
@@ -9977,12 +9935,10 @@ Commands
                        check a contribution between two git refs
   build [files]        Build language versions now (renders the mirror projects)
   hook                 post-render entry point (runs build on full renders only)
-  sync                 Parallel storage: record translations edited in the documents
-                       and rewrite them from the current source
+  sync                 Record translations edited in the translated documents
+                       (_i18n/<lang>/...) and rewrite them from the current source
     --by <login>       who made the edits (recorded as origin and review)
     --reset            also rewrite documents whose structure no longer matches
-  migrate --to <yaml|parallel>
-                       Convert all translations to the other storage
 
 Options
   --lang fr,es         languages (default: translate.targets; env QUARTO_I18N_LANGUAGES)
@@ -10010,11 +9966,6 @@ async function main() {
     return 0;
   }
   const root = typeof opts.project === "string" ? path7.resolve(opts.project) : findProjectRoot();
-  if (cmd === "migrate") {
-    if (opts.to !== "yaml" && opts.to !== "parallel") throw new Error("--to yaml or --to parallel");
-    await migrate(root, opts.to, log(""));
-    return 0;
-  }
   const p = new Project(root);
   const lang = typeof opts.lang === "string" ? opts.lang : void 0;
   switch (cmd) {
@@ -10081,7 +10032,7 @@ async function main() {
       return f.some((x) => x.level === "error") ? 1 : 0;
     }
     case "sync": {
-      const r = await syncParallel(p, p.languages(lang), { by: typeof opts.by === "string" ? opts.by : void 0, reset: !!opts.reset }, log(""));
+      const r = await syncDocs(p, p.languages(lang), { by: typeof opts.by === "string" ? opts.by : void 0, reset: !!opts.reset }, log(""));
       for (const x of r.filter((x2) => x2.error)) console.log(`  \u2716 ${x.lang} ${x.file}: ${x.error}`);
       if (!r.some((x) => x.changed || x.recorded.length || x.error)) log("")("nothing to sync");
       return r.some((x) => x.error) ? 1 : 0;

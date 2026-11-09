@@ -8,7 +8,7 @@ import { renderMode } from '../adapters/host.ts';
 import { buildAll, postProcess } from './build.ts';
 import { checkPr, checkProject, formatChecks, formatFindings, formatStatus, readGitPr, status } from './check.ts';
 import { findProjectRoot, Project } from './project.ts';
-import { migrate, syncParallel } from './storage.ts';
+import { syncDocs } from './sync.ts';
 import { applyWork, exportWork, workPath } from './translate.ts';
 
 const HELP = `quarto-i18n: managed translations for Quarto projects
@@ -27,12 +27,10 @@ Commands
                        check a contribution between two git refs
   build [files]        Build language versions now (renders the mirror projects)
   hook                 post-render entry point (runs build on full renders only)
-  sync                 Parallel storage: record translations edited in the documents
-                       and rewrite them from the current source
+  sync                 Record translations edited in the translated documents
+                       (_i18n/<lang>/...) and rewrite them from the current source
     --by <login>       who made the edits (recorded as origin and review)
     --reset            also rewrite documents whose structure no longer matches
-  migrate --to <yaml|parallel>
-                       Convert all translations to the other storage
 
 Options
   --lang fr,es         languages (default: translate.targets; env QUARTO_I18N_LANGUAGES)
@@ -63,11 +61,6 @@ async function main(): Promise<number> {
     return 0;
   }
   const root = typeof opts.project === 'string' ? path.resolve(opts.project) : findProjectRoot();
-  if (cmd === 'migrate') {
-    if (opts.to !== 'yaml' && opts.to !== 'parallel') throw new Error('--to yaml or --to parallel');
-    await migrate(root, opts.to, log(''));
-    return 0;
-  }
   const p = new Project(root);
   const lang = typeof opts.lang === 'string' ? opts.lang : undefined;
 
@@ -137,7 +130,7 @@ async function main(): Promise<number> {
       return f.some((x) => x.level === 'error') ? 1 : 0;
     }
     case 'sync': {
-      const r = await syncParallel(p, p.languages(lang), { by: typeof opts.by === 'string' ? opts.by : undefined, reset: !!opts.reset }, log(''));
+      const r = await syncDocs(p, p.languages(lang), { by: typeof opts.by === 'string' ? opts.by : undefined, reset: !!opts.reset }, log(''));
       for (const x of r.filter((x) => x.error)) console.log(`  ✖ ${x.lang} ${x.file}: ${x.error}`);
       if (!r.some((x) => x.changed || x.recorded.length || x.error)) log('')('nothing to sync');
       return r.some((x) => x.error) ? 1 : 0;

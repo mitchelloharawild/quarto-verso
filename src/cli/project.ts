@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml, parseDocument } from 'yaml';
 import { pandocMarkdown } from '../adapters/markdown.ts';
 import { parseLangGlossary, parseSourceGlossary, stringifyLangGlossary, termHashes } from '../core/glossary.ts';
-import { parseTrack, readParallel, stringifyTrack, withPolicy, writeParallel, type ParallelRead } from '../core/parallel.ts';
 import { syncUnits } from '../core/sync.ts';
+import { parseTrack, readDoc, stringifyTrack, withPolicy, writeDoc, type DocRead } from '../core/tdoc.ts';
 import { parseTFile, stringifyTFile } from '../core/tfile.ts';
 import { extractUnits, projectUnits, type Issue } from '../core/units.ts';
 import { sourcesFromHistory } from './history.ts';
@@ -31,8 +31,8 @@ export interface FileState {
   synced: SyncedUnit[];
   tfile?: TFile;
   issues: Issue[];
-  /** Parallel storage: how the translated document was read. */
-  parallel?: ParallelRead;
+  /** How the translated document was read (documents only, not the project file). */
+  doc?: DocRead;
 }
 
 /** Reads a file by its path relative to the project root; undefined when absent. */
@@ -47,14 +47,14 @@ export class Project {
   private unitCache = new Map<string, { units: SourceUnit[]; issues: Issue[] }>();
   private historyCache = new Map<string, Map<string, string>>();
 
-  constructor(root: string, opts: { storage?: 'yaml' | 'parallel' } = {}) {
+  constructor(root: string) {
     this.root = path.resolve(root);
     const cfgPath = path.join(this.root, PROJECT_FILE);
     if (!fs.existsSync(cfgPath)) throw new Error(`no ${PROJECT_FILE} in ${this.root}`);
     this.config = parseYaml(fs.readFileSync(cfgPath, 'utf8')) ?? {};
     const tc = this.config.translate;
     if (!tc || !tc.source || !Array.isArray(tc.targets)) throw new Error(`${PROJECT_FILE}: translate.source and translate.targets are required`);
-    this.tc = opts.storage ? { ...tc, storage: opts.storage } : tc;
+    this.tc = tc;
     this.extDir = extensionDir();
     this.md = pandocMarkdown();
   }
@@ -106,16 +106,7 @@ export class Project {
     return path.join(this.i18nDir, lang, file === PROJECT_FILE ? PROJECT_TFILE : `${file}.yml`);
   }
 
-  get storage(): 'yaml' | 'parallel' {
-    return this.tc.storage === 'parallel' ? 'parallel' : 'yaml';
-  }
-
-  /** Parallel storage keeps documents as translated copies; the project file stays YAML. */
-  isParallel(file: string): boolean {
-    return this.storage === 'parallel' && file !== PROJECT_FILE;
-  }
-
-  /** The translated copy of a document (parallel storage). */
+  /** The translated copy of a document. */
   docPath(lang: string, file: string): string {
     return path.join(this.i18nDir, lang, file);
   }
@@ -124,10 +115,13 @@ export class Project {
     return path.relative(this.root, abs).split(path.sep).join('/');
   }
 
-  /** The files that hold a document's translation, relative to the root. */
+  /**
+   * The files that hold a translation, relative to the root: the translated
+   * document and its tracking file, or the project file's translation file.
+   */
   storedPaths(lang: string, file: string): string[] {
     const track = this.rel(this.tfilePath(lang, file));
-    return this.isParallel(file) ? [this.rel(this.docPath(lang, file)), track] : [track];
+    return file === PROJECT_FILE ? [track] : [this.rel(this.docPath(lang, file)), track];
   }
 
   private readonly disk: FileGetter = (rel) => {
@@ -137,45 +131,43 @@ export class Project {
 
   /**
    * The translation of one document as stored, from disk or from another
-   * version of the files (`get`, e.g. a PR branch). Parallel storage also
-   * returns how the document was read.
+   * version of the files (`get`, e.g. a PR branch). For a document, also how
+   * the translated copy was read.
    */
-  async loadTFile(lang: string, file: string, get: FileGetter = this.disk): Promise<{ tfile?: TFile; parallel?: ParallelRead }> {
-    const [first, second] = this.storedPaths(lang, file);
+  async loadTFile(lang: string, file: string, get: FileGetter = this.disk): Promise<{ tfile?: TFile; doc?: DocRead }> {
+    const paths = this.storedPaths(lang, file);
+    const track = paths[paths.length - 1];
     try {
-      if (!this.isParallel(file)) {
-        const t = get(first);
-        return { tfile: t === undefined ? undefined : parseTFile(t) };
-      }
-      const doc = get(first);
-      const track = get(second);
-      if (track === undefined) return {};
-      if (doc === undefined) throw new Error(`${first} is missing (its tracking file exists)`);
-      const r = await readParallel(doc, parseTrack(track), this.md);
-      return { tfile: withPolicy(r), parallel: r };
+      const t = get(track);
+      if (t === undefined) return {};
+      if (file === PROJECT_FILE) return { tfile: parseTFile(t) };
+      const doc = get(paths[0]);
+      if (doc === undefined) throw new Error(`${paths[0]} is missing (its tracking file exists)`);
+      const r = await readDoc(doc, parseTrack(t), this.md);
+      return { tfile: withPolicy(r), doc: r };
     } catch (e) {
-      throw new Error(`${this.isParallel(file) ? second : first}: ${(e as Error).message}`);
+      throw new Error(`${track}: ${(e as Error).message}`);
     }
   }
 
   /** The stored form of a translation: path (relative to the root) → content. */
   async serialise(t: TFile, raw?: Map<string, string>): Promise<Record<string, string>> {
     const paths = this.storedPaths(t.lang, t.source);
-    if (!this.isParallel(t.source)) return { [paths[0]]: stringifyTFile(t) };
+    if (t.source === PROJECT_FILE) return { [paths[0]]: stringifyTFile(t) };
     const { units } = await this.units(t.source);
-    const w = writeParallel(t.source, this.readSource(t.source), units, t, raw);
+    const w = writeDoc(t.source, this.readSource(t.source), units, t, raw);
     return { [paths[0]]: w.doc, [paths[1]]: stringifyTrack(w.track, path.posix.basename(paths[0])) };
   }
 
   /**
-   * Write a translation. With parallel storage, a translated document whose
-   * structure no longer matches its tracking file is never overwritten (its
-   * translations could not be carried over) unless `reset` is set.
+   * Write a translation. A translated document whose structure no longer
+   * matches its tracking file is never overwritten (its translations could not
+   * be carried over) unless `reset` is set.
    */
   async saveTFile(t: TFile, raw?: Map<string, string>, opts: { reset?: boolean } = {}): Promise<void> {
-    if (this.isParallel(t.source) && !opts.reset) {
+    if (t.source !== PROJECT_FILE && !opts.reset) {
       const cur = await this.loadTFile(t.lang, t.source);
-      const bad = cur.parallel?.issues.find((i) => i.kind === 'structure');
+      const bad = cur.doc?.issues.find((i) => i.kind === 'structure');
       if (bad) throw new Error(`${this.storedPaths(t.lang, t.source)[0]}: not written, ${bad.message}`);
     }
     for (const [rel, content] of Object.entries(await this.serialise(t, raw))) {
@@ -224,10 +216,10 @@ export class Project {
 
   async state(lang: string, file: string): Promise<FileState> {
     const { units, issues } = await this.units(file);
-    const { tfile, parallel } = await this.loadTFile(lang, file);
+    const { tfile, doc } = await this.loadTFile(lang, file);
     const synced = syncUnits(file, units, tfile, { termHashes: termHashes(this.glossary(), this.langGlossary(lang)) });
-    if (parallel) await this.recoverSources(file, synced);
-    return { file, units, synced, tfile, issues, parallel };
+    if (doc) await this.recoverSources(file, synced);
+    return { file, units, synced, tfile, issues, doc };
   }
 
   /**

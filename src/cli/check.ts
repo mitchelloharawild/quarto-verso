@@ -82,11 +82,11 @@ export async function checkProject(p: Project, langs: string[]): Promise<Finding
     let stale = 0;
     let missing = 0;
     for (const st of states) {
-      for (const i of st.parallel?.issues ?? []) {
+      for (const i of st.doc?.issues ?? []) {
         const where = `${lang} ${p.storedPaths(lang, st.file)[0]}${i.id ? '#' + i.id : i.line ? ':' + i.line : ''}`;
         out.push({ level: i.kind === 'untracked' ? 'warning' : 'error', where, message: i.kind === 'structure' ? `${i.message} Until then the units in between show the source.` : i.message });
       }
-      for (const u of st.parallel ? [] : st.tfile?.units ?? []) {
+      for (const u of st.doc ? [] : st.tfile?.units ?? []) {
         const extra = unknownKeys(u);
         if (extra.length) out.push({ level: 'warning', where: `${lang} ${st.file}#${u.id}`, message: `unknown keys ${extra.join(', ')} in the translation file (left by another version; \`i18n translate\` removes them)` });
       }
@@ -127,7 +127,7 @@ export interface PrInput {
   head: Map<string, string>;
   changed: string[];
   /** Reads a file the PR did not change (path in the repo), from the base. */
-  readUnchanged?: (path: string) => string | undefined;
+  readUnchanged: (path: string) => string | undefined;
 }
 
 /** A PR in git: changed files between the merge base and head. */
@@ -157,7 +157,7 @@ export async function checkPr(p: Project, pr: PrInput, prefix: string): Promise<
   return checkContribution(pr.base, pr.head, pr.changed, {
     author: pr.author.startsWith('gh:') ? pr.author : `gh:${pr.author}`,
     branch: pr.branch, prefix, md: p.md,
-    readUnchanged: p.storage !== 'parallel' ? undefined : pr.readUnchanged,
+    readUnchanged: pr.readUnchanged,
     units: async (file) => {
       if (file !== PROJECT_FILE && !p.sources().includes(file)) return null;
       return (await p.units(file)).units;
