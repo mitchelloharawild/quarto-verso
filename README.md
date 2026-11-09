@@ -15,7 +15,7 @@ Status: in development. The GitHub App PR service is not built yet.
 | `src/core/` | Pure library (no `node:*`): units, hashing, alignment, translated documents and tracking files, validation, materialise, glossary, contribution checks |
 | `src/adapters/` | Pandoc (Markdown), Quarto host (binaries, render mode, nested render) |
 | `src/cli/` | `translate`, `status`, `check`, `build`, `hook`, `sync` |
-| `_extensions/quarto-i18n/` | The installable extension: bundled `i18n.mjs`, `tr.lua`, `review.js`/`review.css` |
+| `_extensions/verso/` | The installable extension: bundled `i18n.mjs`, `hook.ts`, `tr.lua`, `review.js`/`review.css` |
 | `templates/i18n-check.yml` | GitHub Actions workflow for site repositories: checks contribution PRs |
 | `test/` | `node --test` suite for the core |
 
@@ -25,7 +25,9 @@ Node 24 or later and Quarto 1.10. The tool itself needs no language runtime.
 
 ## Commands
 
-Run from a project directory: `node _extensions/quarto-i18n/i18n.mjs <command>`.
+Install into a project with `quarto add mitchelloharawild/quarto-verso`, which puts
+the extension in `_extensions/mitchelloharawild/verso/`. Run commands from the
+project directory: `node _extensions/mitchelloharawild/verso/i18n.mjs <command>`.
 
 ```sh
 i18n status                         # units, reviews, stale and missing per file
@@ -43,18 +45,25 @@ tracking file `_i18n/<lang>/<file>.qmd.yml` with unit ids, hashes, origins and
 reviews (no text). The project's own strings (`_quarto.yml`) are translated in
 `_i18n/<lang>/_project.yml`.
 
-The project keeps its own Quarto type (book, website, manuscript, ...). The only
-additions to `_quarto.yml` are the `translate:` block and one hook:
+The project keeps its own Quarto type (book, website, manuscript, ...), and the
+only addition to `_quarto.yml` is the `verso-translate:` block:
 
 ```yaml
 project:
   type: book
-  post-render: node _extensions/quarto-i18n/i18n.mjs hook
+
+verso-translate:
+  source: en
+  targets: [fr, es]
 ```
 
-A full `quarto render` then builds every language through that hook; preview
-and single-file renders build the source only. (The earlier `type: quarto-i18n`
-is still read as a book.)
+The extension contributes its own post-render hook (`contributes: metadata:
+project:` in `_extension.yml`), so installing it is the whole setup. Quarto
+resolves the hook script, `hook.ts`, against the extension's folder and runs it
+with its bundled Deno; the script runs `i18n.mjs hook` with Node. A full
+`quarto render` then builds every language; preview and single-file renders
+build the source only. The hook does nothing in projects without a
+`verso-translate:` block. (The earlier `type: quarto-i18n` is still read as a book.)
 
 ## Development
 

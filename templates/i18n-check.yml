@@ -28,7 +28,7 @@ jobs:
           version: 1.10.18
       - name: Check the contribution
         run: >
-          node _extensions/quarto-i18n/i18n.mjs check
+          node "$(find _extensions -path "*/verso/i18n.mjs" | head -n 1)" check
           --base "origin/${{ github.base_ref }}" --head HEAD
           --author "${{ github.event.pull_request.user.login }}"
           --branch "${{ github.head_ref }}"

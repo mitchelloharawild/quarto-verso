@@ -11,7 +11,7 @@ import { toTFile, translatedUnit } from '../core/sync.ts';
 import { normaliseCode, validate, type Candidate } from '../core/validate.ts';
 import type { LangGlossaryEntry, SyncedUnit } from '../core/types.ts';
 import type { Log } from './build.ts';
-import { PROJECT_FILE, type FileState, type Project } from './project.ts';
+import { CONFIG_KEY, PROJECT_FILE, type FileState, type Project } from './project.ts';
 
 export const WORK_VERSION = 1;
 
@@ -168,7 +168,7 @@ export async function applyWork(p: Project, file: string, log: Log, answersFile?
   if (wf.tool !== 'quarto-i18n' || wf.version !== WORK_VERSION) throw new Error(`${file} is not a quarto-i18n work file (version ${WORK_VERSION})`);
   if (answersFile) log(`merged ${mergeAnswers(wf, answersFile)} answers from ${path.basename(answersFile)}`);
   const lang = wf.lang;
-  if (!p.tc.targets.map(String).includes(lang)) throw new Error(`${lang} is not in translate.targets`);
+  if (!p.tc.targets.map(String).includes(lang)) throw new Error(`${lang} is not in ${CONFIG_KEY}.targets`);
   const date = new Date().toISOString().slice(0, 10);
   const origin = { by: 'llm', model: wf.model ?? 'unknown', date };
   const res: ApplyResult = { applied: 0, glossary: 0, skipped: [], rejected: [] };

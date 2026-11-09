@@ -1,13 +1,13 @@
 // quarto-i18n CLI: translate | status | check | build | hook
 //
 // Run from a project directory (or pass --project <dir>):
-//   node _extensions/quarto-i18n/i18n.mjs <command> [options]
+//   node _extensions/verso/i18n.mjs <command> [options]
 
 import path from 'node:path';
 import { renderMode } from '../adapters/host.ts';
 import { buildAll, postProcess } from './build.ts';
 import { checkPr, checkProject, formatChecks, formatFindings, formatStatus, readGitPr, status } from './check.ts';
-import { findProjectRoot, Project } from './project.ts';
+import { findProjectRoot, hasTranslateConfig, Project } from './project.ts';
 import { syncDocs } from './sync.ts';
 import { applyWork, exportWork, workPath } from './translate.ts';
 
@@ -33,7 +33,7 @@ Commands
     --reset            also rewrite documents whose structure no longer matches
 
 Options
-  --lang fr,es         languages (default: translate.targets; env QUARTO_I18N_LANGUAGES)
+  --lang fr,es         languages (default: verso-translate.targets; env QUARTO_I18N_LANGUAGES)
   --project <dir>      project directory (default: nearest _quarto.yml)
 `;
 
@@ -61,6 +61,9 @@ async function main(): Promise<number> {
     return 0;
   }
   const root = typeof opts.project === 'string' ? path.resolve(opts.project) : findProjectRoot();
+  // The extension contributes the hook to every project it is installed in,
+  // including each language's mirror project; it acts only where `verso-translate:` is set.
+  if (cmd === 'hook' && !hasTranslateConfig(root)) return 0;
   const p = new Project(root);
   const lang = typeof opts.lang === 'string' ? opts.lang : undefined;
 

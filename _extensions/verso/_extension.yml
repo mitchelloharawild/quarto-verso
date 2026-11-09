@@ -1,0 +1,16 @@
+title: verso
+author: quarto-verso contributors
+version: 0.1.0
+quarto-required: ">=1.10.0"
+# Installing the extension is the whole setup: the project keeps its own type
+# (book, website, ...) and only adds a `verso-translate:` block to _quarto.yml.
+# The post-render hook below does nothing in projects without one, and builds
+# the languages on full renders. Quarto resolves hook.ts against this folder,
+# wherever it is installed. `i18n build` adds tr.lua to each language's mirror.
+contributes:
+  filters:
+    - tr.lua
+  metadata:
+    project:
+      post-render:
+        - hook.ts

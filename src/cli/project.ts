@@ -16,13 +16,15 @@ import type { GlossaryEntry, LangGlossaryEntry, MarkdownAdapter, SourceUnit, Syn
 /** Directory holding tr.lua and review.js (the installed extension). */
 export function extensionDir(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
-  for (const c of [here, path.resolve(here, '../../_extensions/quarto-i18n')]) {
+  for (const c of [here, path.resolve(here, '../../_extensions/verso')]) {
     if (fs.existsSync(path.join(c, 'tr.lua'))) return c;
   }
   throw new Error('cannot locate the quarto-i18n extension directory');
 }
 
 export const PROJECT_FILE = '_quarto.yml';
+/** The _quarto.yml block that configures translation. */
+export const CONFIG_KEY = 'verso-translate';
 
 /** Quarto's default output directory per project type. */
 const DEFAULT_OUTPUT: Record<string, string> = { book: '_book', website: '_site', manuscript: '_manuscript' };
@@ -55,8 +57,8 @@ export class Project {
     const cfgPath = path.join(this.root, PROJECT_FILE);
     if (!fs.existsSync(cfgPath)) throw new Error(`no ${PROJECT_FILE} in ${this.root}`);
     this.config = parseYaml(fs.readFileSync(cfgPath, 'utf8')) ?? {};
-    const tc = this.config.translate;
-    if (!tc || !tc.source || !Array.isArray(tc.targets)) throw new Error(`${PROJECT_FILE}: translate.source and translate.targets are required`);
+    const tc = this.config[CONFIG_KEY];
+    if (!tc || !tc.source || !Array.isArray(tc.targets)) throw new Error(`${PROJECT_FILE}: ${CONFIG_KEY}.source and ${CONFIG_KEY}.targets are required`);
     this.tc = tc;
     this.extDir = extensionDir();
     this.md = pandocMarkdown();
@@ -94,7 +96,7 @@ export class Project {
     const all = this.tc.targets.map(String);
     if (!want) return all;
     const sel = want.split(',').map((s) => s.trim());
-    for (const l of sel) if (!all.includes(l)) throw new Error(`${l} is not in translate.targets`);
+    for (const l of sel) if (!all.includes(l)) throw new Error(`${l} is not in ${CONFIG_KEY}.targets`);
     return sel;
   }
 
@@ -261,6 +263,12 @@ export class Project {
   configDocument() {
     return parseDocument(fs.readFileSync(path.join(this.root, PROJECT_FILE), 'utf8'));
   }
+}
+
+/** Whether the project at `root` is set up for translation (has a `verso-translate:` block). */
+export function hasTranslateConfig(root: string): boolean {
+  const cfg = path.join(root, PROJECT_FILE);
+  return fs.existsSync(cfg) && !!(parseYaml(fs.readFileSync(cfg, 'utf8')) ?? {})[CONFIG_KEY];
 }
 
 export function findProjectRoot(start = process.cwd()): string {

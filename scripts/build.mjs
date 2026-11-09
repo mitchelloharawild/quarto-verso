@@ -3,7 +3,7 @@ import { build } from 'esbuild';
 
 await build({
   entryPoints: ['src/cli/main.ts'],
-  outfile: '_extensions/quarto-i18n/i18n.mjs',
+  outfile: '_extensions/verso/i18n.mjs',
   bundle: true,
   platform: 'node',
   format: 'esm',
