@@ -9049,6 +9049,7 @@ function extensionDir() {
 }
 var PROJECT_FILE = "_quarto.yml";
 var CONFIG_KEY = "verso-translate";
+var DEFAULT_SERVICE = "https://verso.nectric.com.au";
 var DEFAULT_OUTPUT = { book: "_book", website: "_site", manuscript: "_manuscript" };
 var PROJECT_TFILE = "_project.yml";
 var Project = class {
@@ -9089,6 +9090,15 @@ var Project = class {
   }
   get i18nDir() {
     return path2.join(this.root, "_i18n");
+  }
+  /**
+   * The PR service the review tray submits to: `review.service`, else the
+   * shared service when the site names a repository; null when off.
+   */
+  get reviewService() {
+    const s = this.tc.review?.service;
+    if (s === false || !this.tc.review?.repo) return null;
+    return typeof s === "string" && s ? s : DEFAULT_SERVICE;
   }
   get reviewTarget() {
     return this.tc.review?.target ?? 2;
@@ -9441,7 +9451,7 @@ ${lines.slice(-15).join("\n")}`);
       guide: guideHref(p.tc.review?.guide, page),
       repo,
       dir: p.tc.review?.dir ?? "",
-      service: p.tc.review?.service ?? null,
+      service: p.reviewService,
       target: p.reviewTarget,
       strings: S,
       stats: statsOf.get(st.file),

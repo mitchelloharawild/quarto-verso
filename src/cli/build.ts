@@ -219,7 +219,7 @@ export async function buildLanguage(p: Project, lang: string, log: Log): Promise
       tfile: p.storedPaths(lang, st.file)[0],
       original: '../'.repeat(page.split('/').length) + page,
       guide: guideHref(p.tc.review?.guide, page),
-      repo, dir: p.tc.review?.dir ?? '', service: p.tc.review?.service ?? null, target: p.reviewTarget,
+      repo, dir: p.tc.review?.dir ?? '', service: p.reviewService, target: p.reviewTarget,
       strings: S, stats: statsOf.get(st.file), units: m.units.map(slim),
     };
     const out = path.join(dest, page.replace(/\.html$/, '.tr.json'));

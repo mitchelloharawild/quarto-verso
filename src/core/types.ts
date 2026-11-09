@@ -114,8 +114,11 @@ export interface TranslateConfig {
     repo?: string;
     /** Reviews per unit counted as fully reviewed. */
     target?: number;
-    /** PR service URL. */
-    service?: string;
+    /**
+     * PR service URL. Default: the shared service (DEFAULT_SERVICE) when `repo`
+     * is set; `false` turns submissions off (reviews stay in the browser).
+     */
+    service?: string | false;
     /** Directory of the site inside the repository, when not the root. */
     dir?: string;
     /** Page that explains reviewing (a project file such as `contributing.qmd`, or a URL). */

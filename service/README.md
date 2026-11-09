@@ -4,10 +4,25 @@ Readers of a translated Quarto site sign in with GitHub from the review tray
 and submit their reviews; the service commits them to a fork it owns and opens
 a pull request on the site's repository in the reader's name.
 
-One instance serves every site (like giscus). A site owner hosts nothing: they
-install the **verso-i18n** GitHub App on the repository, list their site's
-origin in `_i18n/_service.yml`, and set `verso-translate.review.service` to the
-service's address.
+One instance serves every site (like giscus); the shared one is
+`https://verso.nectric.com.au`. A site owner hosts nothing: they install the
+**verso-i18n** GitHub App on the repository, set `verso-translate.review.repo`,
+and list their site's origin in `_i18n/_service.yml`:
+
+```yaml
+# _quarto.yml
+verso-translate:
+  review:
+    repo: owner/name
+    # service: https://verso.example.org   # another instance (default: the shared one)
+    # service: false                        # no submissions; reviews stay in the browser
+```
+
+```yaml
+# _i18n/_service.yml
+origins:
+  - https://owner.github.io
+```
 
 The service keeps no database. Sessions are sealed into the reader's browser;
 repository snapshots are a disposable cache.

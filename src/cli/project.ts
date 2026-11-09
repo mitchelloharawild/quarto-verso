@@ -26,6 +26,9 @@ export const PROJECT_FILE = '_quarto.yml';
 /** The _quarto.yml block that configures translation. */
 export const CONFIG_KEY = 'verso-translate';
 
+/** The shared verso-i18n PR service, used when `review.service` is not set. */
+export const DEFAULT_SERVICE = 'https://verso.nectric.com.au';
+
 /** Quarto's default output directory per project type. */
 const DEFAULT_OUTPUT: Record<string, string> = { book: '_book', website: '_site', manuscript: '_manuscript' };
 export const PROJECT_TFILE = '_project.yml';
@@ -86,6 +89,16 @@ export class Project {
 
   get i18nDir(): string {
     return path.join(this.root, '_i18n');
+  }
+
+  /**
+   * The PR service the review tray submits to: `review.service`, else the
+   * shared service when the site names a repository; null when off.
+   */
+  get reviewService(): string | null {
+    const s = this.tc.review?.service;
+    if (s === false || !this.tc.review?.repo) return null;
+    return typeof s === 'string' && s ? s : DEFAULT_SERVICE;
   }
 
   get reviewTarget(): number {
