@@ -1,5 +1,4 @@
-// build: materialise each language as a mirror project, render it, copy it to
-// <output>/<lang>, write review data, and add hreflang and the switcher.
+// build: render each language as a mirror project into <output>/<lang>.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -115,9 +114,7 @@ function mirrorConfig(p: Project, lang: string, proj: Materialised): string {
   const siteUrl = doc.getIn([top, 'site-url']);
   if (typeof siteUrl === 'string') doc.setIn([top, 'site-url'], siteUrl.replace(/\/?$/, `/${lang}/`));
   doc.deleteIn([top, 'repo-actions']);
-  // An extension installed in the project (_extensions/verso or
-  // _extensions/<owner>/verso) keeps its relative path inside the mirror, whose
-  // _extensions is linked; otherwise use the absolute path.
+  // Relative inside the project (the mirror links _extensions), else absolute.
   const rel = path.relative(p.root, path.join(p.extDir, 'tr.lua'));
   const lua = rel.startsWith('_extensions' + path.sep) ? rel.split(path.sep).join('/') : path.join(p.extDir, 'tr.lua');
   const filters = (doc.get('filters') as any)?.toJSON?.() ?? [];
@@ -254,7 +251,6 @@ function slim(u: PageUnit) {
   return rest;
 }
 
-// ---- HTML post-processing ----------------------------------------------------
 
 const START = '<!-- quarto-i18n:start -->';
 const END = '<!-- quarto-i18n:end -->';

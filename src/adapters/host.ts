@@ -1,5 +1,4 @@
-// host adapter: which binaries to call, render-mode detection, and the
-// nested render. Quarto 1 implementation; q2 differences are noted inline.
+// Host adapter: binaries, render mode and nested renders (Quarto 1).
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -27,10 +26,7 @@ export function quartoBin(): string {
   return which('quarto') ?? 'quarto';
 }
 
-/**
- * Pandoc bundled with Quarto, called directly for speed; `quarto pandoc` as
- * fallback. Without Quarto (the PR service's container), `pandoc` on the PATH.
- */
+/** Quarto's bundled pandoc, else `quarto pandoc`, else `pandoc` on the PATH. */
 export function pandocCommand(): { cmd: string; args: string[] } {
   const q = quartoBin();
   if (q === 'quarto') {
@@ -103,11 +99,7 @@ export async function renderProject(dir: string, onLine?: (l: string) => void): 
   });
 }
 
-/**
- * The failing cell from a nested render's stderr (Quarto 1). knitr reports
- * "Quitting from file.qmd:12-20 [label]" (or "lines 12-20 [label] (file.qmd)");
- * Jupyter reports "Cell k/m: 'label'". q2: file:line:col or --json-errors.
- */
+/** The failing cell from a nested render's stderr (knitr or Jupyter). */
 export function failingCell(stderr: string): { file?: string; label: string } | null {
   const plain = stderr.replace(/\x1b\[[0-9;]*m/g, '');
   let m = /Quitting from (?:lines \d+-\d+ \[([^\]]+)\] \(([^)]+)\)|([^\s:]+):\d+-\d+ \[([^\]]+)\])/.exec(plain);

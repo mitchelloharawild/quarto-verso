@@ -1,10 +1,5 @@
-// A reader's submission: unit operations in; a commit on the reader's branch
-// in the service-owned fork, and a pull request opened with the reader's token.
-//
-//   site repo  owner/name         read with verso-i18n (contents: read)
-//   fork       <fork-owner>/owner--name, branch i18n/<login>/<lang>
-//                                 written with verso-i18n-writer (contents: write)
-//   PR         opened and updated with the reader's own token
+// Submission: operations -> commit to <fork-owner>/owner--name (branch
+// i18n/<login>/<lang>) -> PR opened with the reader's token.
 
 import { applyOps, checkContribution, type CheckResult, type UnitOp } from '../src/core/contrib.ts';
 import { PROJECT_FILE, PROJECT_TFILE, type Project } from '../src/cli/project.ts';
@@ -168,8 +163,7 @@ export async function submit(ctx: SubmitContext, site: Site, reader: Reader, bod
     return { res, head, checks, ok: checks.every((c) => c.ok) };
   };
 
-  // Never lose a reader's work to one bad operation: keep the operations that
-  // pass (page by page, then one at a time) and return the rest with the reason.
+  // Keep the operations that pass; return the rest with the reason.
   let t = await attempt(ops);
   const rejected: Dropped[] = [];
   if (!t.ok) {
@@ -196,9 +190,7 @@ export async function submit(ctx: SubmitContext, site: Site, reader: Reader, bod
       : { status: 422, json: { error: 'nothing to submit', dropped: res.dropped } };
   }
 
-  // Commit to the fork: the default branch's tree plus this PR's files. When
-  // the PR branch was made on an older default branch, the commit also has the
-  // current default branch as a parent, so the PR only ever shows its own files.
+  // The default branch's tree plus this PR's files; also parented on the default branch.
   const fork = await ensureFork(ctx, site, writeToken);
   const baseCommit = await gh(writeToken, 'GET', `/repos/${fork}/git/commits/${site.sha}`);
   const tree = await gh(writeToken, 'POST', `/repos/${fork}/git/trees`, {

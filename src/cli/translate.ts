@@ -1,6 +1,4 @@
-// translate: local only, never in CI. The `external` provider writes a
-// work file that a translator (a person, an LLM agent, another tool)
-// fills in; `--apply` validates the result and writes the translation files.
+// translate: write a work file for the translator; `--apply` validates and stores it.
 
 import fs from 'node:fs';
 import path from 'node:path';

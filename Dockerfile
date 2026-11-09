@@ -1,12 +1,6 @@
-# The verso-i18n PR service: one shared instance serves every site that
-# installs the verso-i18n GitHub App. See service/README.md.
-#
-#   docker build -t verso-service .
-#   docker run --env-file secrets.env -p 8787:8787 verso-service
+# verso-i18n PR service. See service/README.md.
 
-# Keep in step with the pandoc that Quarto bundles (`quarto pandoc --version`):
-# units are split from pandoc's reading of the source, so readers' submissions
-# and authors' CLI must agree.
+# Match Quarto's bundled pandoc so units split identically.
 ARG PANDOC_VERSION=3.10
 
 FROM node:24-slim AS build

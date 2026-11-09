@@ -1,8 +1,4 @@
-// materialise(source, translations, lang) → translated .qmd. Pure.
-//
-// Translated text is spliced into the source at the units' source ranges, so
-// the author's formatting is kept. Blocks are wrapped in a span carrying
-// data-tr-* attributes; the Lua filter moves them onto the block.
+// materialise(source, translations, lang) → translated .qmd, spliced at unit ranges.
 
 import { Document, parseDocument } from 'yaml';
 import { displayStatus, reviewCount } from './sync.ts';

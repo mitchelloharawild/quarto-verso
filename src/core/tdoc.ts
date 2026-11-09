@@ -1,21 +1,5 @@
-// Translated documents: each language keeps a translated copy of every source
-// document (`_i18n/<lang>/<file>`) next to a tracking file
-// (`_i18n/<lang>/<file>.yml`) that identifies its units and holds hashes and
-// reviews, but no text.
-//
-// The rest of the tool works on the in-memory TFile, so this module only
-// converts in both directions:
-//
-//   readDoc:  translated document + tracking file → TFile
-//   writeDoc: current source + TFile             → translated document + tracking file
-//
-// Matching is positional: the n-th unit of the translated document is the n-th
-// unit of the tracking file, which `writeDoc` guarantees and `readDoc`
-// verifies (kind, cell, option or field, section). The tracking file is then
-// aligned with the current source by the usual sync (sync.ts), so source edits
-// never need guesswork. Everything outside units (cell options, attributes,
-// fences, raw blocks) is taken from the source when rendering; the translated
-// document only carries text.
+// Translated document + tracking file (ids, hashes, reviews; no text) <-> TFile.
+// Units match by position; everything outside units comes from the source.
 
 import { Document, parse } from 'yaml';
 import { codeHash, textHash } from './hash.ts';
@@ -45,7 +29,6 @@ export function translationHash(kind: UnitKind, s: string): string {
   return kind === 'code' ? codeHash(normaliseCode(s)) : textHash(normaliseBlockText(s));
 }
 
-// ---- tracking file IO ---------------------------------------------------------
 
 export function trackHeader(sourcePath: string, docPath: string): string {
   return (
@@ -80,7 +63,6 @@ export function stringifyTrack(t: TrackFile, docPath: string): string {
   return doc.toString({ lineWidth: 0, defaultKeyType: 'PLAIN', singleQuote: false });
 }
 
-// ---- read -----------------------------------------------------------------------
 
 export interface DocIssue {
   /** `structure`: the document no longer matches the tracking file, so no unit can be used. */
@@ -91,12 +73,7 @@ export interface DocIssue {
 }
 
 export interface DocRead {
-  /**
-   * The translation file as stored: text from the document, everything else from
-   * the tracking file. Units in `untracked` keep their recorded reviews here (the
-   * contribution checks compare them); callers that display or count reviews must
-   * use `withPolicy`.
-   */
+  /** As stored; apply `withPolicy` before displaying or counting reviews. */
   tfile: TFile;
   /** Units whose text differs from the recorded `text-hash` (edited without `i18n sync`). */
   untracked: Set<string>;
@@ -176,9 +153,7 @@ export async function readDoc(doc: string, track: TrackFile, md: MarkdownAdapter
   };
 
   if (mismatch !== -1) {
-    // Units before the first difference and after the last one may still line
-    // up; only those holding exactly their recorded translation are used, the
-    // rest show the source until the structure is fixed.
+    // Keep units around the difference that still hold their recorded translation.
     let suffix = 0;
     while (suffix < d.length - mismatch && suffix < t.length - mismatch && sig(d[d.length - 1 - suffix]) === sig(t[t.length - 1 - suffix])) suffix++;
     const units = t.map((tu, i) => (i < mismatch ? fill(tu, d[i], true) : i >= t.length - suffix ? fill(tu, d[d.length - t.length + i], true) : base(tu)));
@@ -200,10 +175,7 @@ function describeMismatch(d: SourceUnit[], t: TrackUnit[], i: number): string {
   return `the translation's structure differs from its tracking file at unit ${i + 1}: found ${name(d[i])}, expected ${name(t[i])}${counts}. ${FIX}`;
 }
 
-/**
- * Display policy: an edit not recorded in the tracking file is a translation by
- * an unknown person, so earlier reviews (of a different text) do not count.
- */
+/** Reviews of an unrecorded edit do not count. */
 export function withPolicy(r: DocRead): TFile {
   return {
     ...r.tfile,
@@ -211,19 +183,13 @@ export function withPolicy(r: DocRead): TFile {
   };
 }
 
-// ---- write ----------------------------------------------------------------------
 
 export interface DocWrite {
   doc: string;
   track: TrackFile;
 }
 
-/**
- * Write the translated document from the current source: every unit's range is
- * replaced by its translation (current or stale), or keeps the source text when
- * there is none. Structure, options and attributes always come from the source,
- * so the document is block-for-block parallel to the tracking file written with it.
- */
+/** The translated document: the source with each unit's range replaced by its translation. */
 export function writeDoc(file: string, sourceText: string, srcUnits: SourceUnit[], tfile: TFile, raw?: Map<string, string>): DocWrite {
   const synced = syncUnits(file, srcUnits, tfile);
   const edits: { start: number; end: number; text: string }[] = [];
@@ -271,11 +237,7 @@ function orderTrack(u: TrackUnit): TrackUnit {
   return o;
 }
 
-/**
- * Text outside the units, for comparing two versions of a translated document:
- * unit text is replaced by a marker, so only changes to structure, options,
- * attributes, raw blocks and front matter (other than translated fields) remain.
- */
+/** The document with unit text masked, to compare everything outside the units. */
 export function outsideUnits(doc: string, docUnits: SourceUnit[]): string {
   const edits = docUnits.filter((u) => u.range).map((u, k) => ({ start: u.range!.start, end: u.range!.end, text: `\u0000${k}\u0000` }));
   let out = applyEdits(doc, edits);

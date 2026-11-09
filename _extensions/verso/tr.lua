@@ -1,10 +1,5 @@
--- quarto-i18n filter, used only in generated language projects.
---
--- It reads what the materialiser wrote and does three things:
---   1. moves data-tr-* (and fallback lang) from the wrapper span onto the block;
---   2. marks where the translation banner goes (metadata i18n.notice);
---   3. loads the reviewer-mode script and styles on HTML pages.
--- All decisions are made in the Node tool; this filter stays small.
+-- verso filter for language projects: moves data-tr-* onto blocks, marks the
+-- banner's place, and loads the reviewer-mode assets.
 
 local function tr_span(inlines)
   if #inlines == 1 and inlines[1].t == "Span" and inlines[1].classes:includes("tr") then

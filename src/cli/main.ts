@@ -1,7 +1,4 @@
-// quarto-i18n CLI: translate | status | check | build | hook
-//
-// Run from a project directory (or pass --project <dir>):
-//   node _extensions/verso/i18n.mjs <command> [options]
+// CLI entry point.
 
 import path from 'node:path';
 import { renderMode } from '../adapters/host.ts';

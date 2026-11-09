@@ -1,6 +1,4 @@
-// Validation of translations against their source units. Used by translate
-// (on import), materialise (render), check, and the PR service: the same rules
-// everywhere.
+// Validation of translations against their source units.
 
 import { sameTokens } from './protect.ts';
 import { compareSkeleton } from './skeleton.ts';
@@ -25,12 +23,7 @@ export function normaliseCode(s: string): string {
 const FENCE = /^\s*(`{3,}|~{3,})/m;
 const OPTION = /^\s*(#|\/\/|--|%%)\|/m;
 
-/**
- * A translated cell body is free text in the cell's language. Without a
- * parser the checks are structural: it must stay inside the cell (no fence
- * line), must not add cell options (which control execution, e.g. `eval` or
- * knitr's `!expr`), and must stay a plausible size.
- */
+/** Code: no fence lines, no cell options, plausible size. */
 export function checkCode(src: string, text: string): string | null {
   const t = normaliseCode(text);
   if (!t) return 'empty translation';

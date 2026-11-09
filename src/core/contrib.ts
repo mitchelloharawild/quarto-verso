@@ -21,11 +21,7 @@ export interface OpResult {
 
 const clone = <T>(x: T): T => structuredClone(x);
 
-/**
- * Apply operations from one contributor to a translation file. `synced` is the
- * file aligned with the current source; operations on stale or missing units
- * are dropped.
- */
+/** Apply one contributor's operations; those on stale or missing units are dropped. */
 export function applyOps(tfile: TFile, synced: SyncedUnit[], ops: UnitOp[], author: string, date: string): OpResult {
   const t = clone(tfile);
   const status = new Map(synced.map((s) => [s.id, s.status]));
@@ -70,7 +66,6 @@ export function applyOps(tfile: TFile, synced: SyncedUnit[], ops: UnitOp[], auth
   return { tfile: t, applied, dropped };
 }
 
-// ---- checks -----------------------------------------------------------------
 
 export interface CheckResult {
   check: number;
@@ -91,11 +86,7 @@ export interface ContribContext {
   /** Current source units for a source file path (relative to the site), from the base branch. */
   units(sourceFile: string): Promise<SourceUnit[] | null>;
   md: MarkdownAdapter;
-  /**
-   * Reads a file (path in the repo) that the PR did not change, from the base
-   * branch: a translated document and its tracking file are checked together
-   * even when the PR changed only one of them.
-   */
+  /** Reads an unchanged file (path in the repo) from the base branch. */
   readUnchanged: (path: string) => string | undefined;
 }
 
@@ -227,14 +218,7 @@ export async function checkContribution(base: Map<string, string>, head: Map<str
   return res;
 }
 
-/**
- * Replace each changed translated document and tracking file by one virtual
- * translation file (text from the document, the rest from the tracking file),
- * so checks 2–7 run on the same form as the project file's translation. Adds
- * the checks only documents need: the document keeps its structure, nothing
- * outside the units changes, and every text change is recorded in the
- * tracking file.
- */
+/** Turn changed documents and tracking files into translation files, with document-only checks. */
 async function expandDocs(base: Map<string, string>, head: Map<string, string>, changed: string[], ctx: ContribContext, esc: string, fail: (n: number, m: string) => void) {
   const doc = new RegExp(`^${esc}_i18n/[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*/(?!_freeze/|build/)[^\\0]+\\.(?:qmd|md)$`);
   const groups = new Set<string>();

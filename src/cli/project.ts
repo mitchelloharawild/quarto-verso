@@ -70,10 +70,7 @@ export class Project {
     return extensionDir();
   }
 
-  /**
-   * The Quarto project type (book, website, manuscript, default, ...). The
-   * extension adds no type of its own; the legacy `quarto-i18n` type was a book.
-   */
+  /** The Quarto project type (the legacy `quarto-i18n` type is a book). */
   get type(): string {
     const t = this.config.project?.type;
     if (typeof t === 'string' && t !== 'quarto-i18n') return t;
@@ -91,10 +88,7 @@ export class Project {
     return path.join(this.root, '_i18n');
   }
 
-  /**
-   * The PR service the review tray submits to: `review.service`, else the
-   * shared service when the site names a repository; null when off.
-   */
+  /** The PR service URL, or null when submissions are off. */
   get reviewService(): string | null {
     const s = this.tc.review?.service;
     if (s === false || !this.tc.review?.repo) return null;
@@ -145,10 +139,7 @@ export class Project {
     return path.relative(this.root, abs).split(path.sep).join('/');
   }
 
-  /**
-   * The files that hold a translation, relative to the root: the translated
-   * document and its tracking file, or the project file's translation file.
-   */
+  /** The files that hold a translation, relative to the root. */
   storedPaths(lang: string, file: string): string[] {
     const track = this.rel(this.tfilePath(lang, file));
     return file === PROJECT_FILE ? [track] : [this.rel(this.docPath(lang, file)), track];
@@ -159,11 +150,7 @@ export class Project {
     return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : undefined;
   };
 
-  /**
-   * The translation of one document as stored, from disk or from another
-   * version of the files (`get`, e.g. a PR branch). For a document, also how
-   * the translated copy was read.
-   */
+  /** The stored translation of a document, from disk or from `get` (e.g. a PR branch). */
   async loadTFile(lang: string, file: string, get: FileGetter = this.disk): Promise<{ tfile?: TFile; doc?: DocRead }> {
     const paths = this.storedPaths(lang, file);
     const track = paths[paths.length - 1];
@@ -189,11 +176,7 @@ export class Project {
     return { [paths[0]]: w.doc, [paths[1]]: stringifyTrack(w.track, path.posix.basename(paths[0])) };
   }
 
-  /**
-   * Write a translation. A translated document whose structure no longer
-   * matches its tracking file is never overwritten (its translations could not
-   * be carried over) unless `reset` is set.
-   */
+  /** Write a translation; a document out of step with its tracking file needs `reset`. */
   async saveTFile(t: TFile, raw?: Map<string, string>, opts: { reset?: boolean } = {}): Promise<void> {
     if (t.source !== PROJECT_FILE && !opts.reset) {
       const cur = await this.loadTFile(t.lang, t.source);
@@ -252,10 +235,7 @@ export class Project {
     return { file, units, synced, tfile, issues, doc };
   }
 
-  /**
-   * Tracking files keep no source text; stale translations get their old source
-   * back from git history (for retranslation and `on-stale: previous`).
-   */
+  /** The old source of stale translations, from git history. */
   private async recoverSources(file: string, synced: SyncedUnit[]): Promise<void> {
     const need = synced.filter((u) => u.status === 'stale' && u.stored?.text && u.stored.source === undefined);
     if (!need.length) return;

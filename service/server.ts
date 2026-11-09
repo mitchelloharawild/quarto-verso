@@ -1,31 +1,5 @@
-// verso-i18n PR service (Node). Readers sign in with GitHub (verso-i18n, a
-// GitHub App with user authorization); their reviews are committed to a fork
-// owned by the service (verso-i18n-writer) and proposed as a PR in their name.
-//
-//   node service/server.ts [--port 8787] [--env ~/.config/verso/secrets.env]
-//                          [--public-url https://…] [--static <rendered site>]
-//
-// Configuration (environment, or the --env file):
-//   VERSO_APP_ID, VERSO_CLIENT_ID, VERSO_CLIENT_SECRET   verso-i18n
-//   VERSO_PRIVATE_KEY               PEM, or VERSO_PRIVATE_KEY_FILE
-//                                   (default ~/.config/verso/verso-i18n.pem)
-//   VERSO_WRITER_APP_ID             verso-i18n-writer
-//   VERSO_WRITER_PRIVATE_KEY        PEM, or VERSO_WRITER_PRIVATE_KEY_FILE
-//                                   (default ~/.config/verso/verso-i18n-writer.pem)
-//   VERSO_SESSION_KEY               32 bytes, base64
-//   VERSO_FORK_OWNER                organisation that owns the forks
-//   VERSO_PUBLIC_URL                public address (the OAuth callback is <url>/auth/callback)
-//   VERSO_CACHE                     repository snapshots (default service/.cache)
-//   PORT                            default 8787
-//
-// Routes:
-//   GET  /healthz                         liveness (no GitHub calls)
-//   GET  /auth/login?repo=&dir=&return=   start "Sign in with GitHub"
-//   GET  /auth/callback                   GitHub returns here; back to the page
-//                                         with #verso-session=…&verso-login=…
-//   POST /api/submit?repo=&dir=           unit operations → commit + PR
-//   GET  /status?repo=&dir=               is everything installed for this site?
-//   GET  /*                               the rendered site, with --static (local testing)
+// verso-i18n PR service (see service/README.md).
+//   node service/server.ts [--port 8787] [--env <secrets.env>] [--public-url <url>] [--static <site>]
 
 import fs from 'node:fs';
 import http from 'node:http';
@@ -76,7 +50,6 @@ const FORK_OWNER = need('VERSO_FORK_OWNER');
 const sites = new Sites(CACHE, reader);
 const log = (m: string) => console.log(`[verso] ${m}`);
 
-// ---- helpers ----------------------------------------------------------------------
 
 type Headers = Record<string, string>;
 
@@ -144,7 +117,6 @@ async function readerFrom(header: string | undefined): Promise<{ reader: { id: n
   }
 }
 
-// ---- routes ----------------------------------------------------------------------------
 
 async function login(url: URL, res: http.ServerResponse) {
   const repo = url.searchParams.get('repo') ?? '';

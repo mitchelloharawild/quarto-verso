@@ -1,7 +1,4 @@
-// quarto-i18n reviewer mode. Plain browser code, no dependencies.
-//
-// Normal readers load only this small script; the per-page review data
-// (<page>.tr.json) is fetched only when reviewer mode is on.
+// verso reviewer mode. Review data (<page>.tr.json) loads only in reviewer mode.
 (function () {
   "use strict";
 
@@ -11,7 +8,6 @@
   var S = {};
   var openFor = null;
 
-  // ---- storage (per-viewer conveniences only; never required) ---------------
   function load(k, dflt) {
     try {
       var v = window.localStorage.getItem(KEY + k);
@@ -31,7 +27,6 @@
     }
   }
 
-  // ---- helpers ----------------------------------------------------------------
   function el(tag, attrs, children) {
     var e = document.createElement(tag);
     for (var k in attrs || {}) {
@@ -85,7 +80,6 @@
     return list.map(function (r) { return r.by.replace(/^gh:/, "@"); }).join(", ");
   }
 
-  // ---- mode -------------------------------------------------------------------
   function reviewRequested() {
     // ?review=1 is remembered, so reviewer mode (and the tray) follows the reader to other pages.
     var q = new URLSearchParams(window.location.search).get("review");
@@ -124,7 +118,6 @@
     });
   }
 
-  // ---- banner -----------------------------------------------------------------
   // In reviewer mode the banner's call to action becomes a thank-you to the
   // signed-in reviewer, with a link to how reviewing works.
   function updateBanner() {
@@ -159,7 +152,6 @@
     });
   }
 
-  // ---- units on the page ----------------------------------------------------
   var units = {};
   var targets = [];
 
@@ -255,14 +247,7 @@
     open(ev.currentTarget);
   }
 
-  // ---- pending operations -----------------------------------------------------
-  // One list per language for the whole site; each operation records its page,
-  // so changes on several pages go into one pull request.
-  //
-  // An operation the service did not accept stays in the list with `held` (the
-  // reason), so no work is lost: the reader can read why, try again or discard.
-  // If the browser will not store the list, it is kept in memory for this page
-  // and the reader is warned before leaving.
+  // One list per language; rejected operations stay with `held` (the reason).
   var memPending = null;
   function pendingKey() { return "pending:" + data.lang; }
   function pendingAll() {
@@ -407,7 +392,6 @@
     return pages.sort(function (a, b) { return (b.file === data.file) - (a.file === data.file); });
   }
 
-  // ---- popover --------------------------------------------------------------------
   var pop = null;
 
   function close() {
@@ -520,7 +504,6 @@
     pop.style.left = left + "px";
   }
 
-  // ---- tray and submission -------------------------------------------------------
   var tray = null;
 
   var resultBox = null;
@@ -642,9 +625,7 @@
     ]));
   }
 
-  // ---- GitHub sign-in (like giscus) -----------------------------------------------
-  // The service sends the reader back with #verso-session=…&verso-login=… (a
-  // fragment never reaches a server). The sealed session is all the page keeps.
+  // The service returns #verso-session=…&verso-login=…; only the sealed session is kept.
   var signInError = null;
 
   function takeSessionFromUrl() {
@@ -804,7 +785,6 @@
     renderTray();
   }
 
-  // ---- lifecycle --------------------------------------------------------------------
   // fromClick: the reader chose "Review this page" just now, so a signed-out
   // reader goes straight to GitHub and comes back here in reviewer mode.
   function start(fromClick) {
