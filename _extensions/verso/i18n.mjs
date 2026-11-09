@@ -7391,7 +7391,6 @@ function quartoBin() {
   return which("quarto") ?? "quarto";
 }
 function pandocCommand() {
-  if (process.env.VERSO_TRANSLATE_PANDOC) return { cmd: process.env.VERSO_TRANSLATE_PANDOC, args: [] };
   const q = quartoBin();
   try {
     const real = fs.realpathSync(q);

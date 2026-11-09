@@ -29,7 +29,6 @@ export function quartoBin(): string {
 
 /** Pandoc bundled with Quarto, called directly for speed; `quarto pandoc` as fallback. */
 export function pandocCommand(): { cmd: string; args: string[] } {
-  if (process.env.VERSO_TRANSLATE_PANDOC) return { cmd: process.env.VERSO_TRANSLATE_PANDOC, args: [] };
   const q = quartoBin();
   try {
     const real = fs.realpathSync(q);
