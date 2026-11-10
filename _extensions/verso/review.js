@@ -454,7 +454,7 @@
     var actions = el("div", { class: "tr-actions" });
     var approveBtn = el("button", { type: "button", class: "btn btn-sm btn-primary", disabled: !current || approved || mineActive.some(function (m) { return m.op === "approve"; }) ? "" : null, onclick: function () { addOp({ op: "approve", id: u.id }); close(); } }, [S.approve]);
     var draft = mine.filter(function (m) { return m.op === "replace"; })[0];
-    var suggestBtn = el("button", { type: "button", class: "btn btn-sm btn-outline-secondary", disabled: !current ? "" : null, onclick: function () { showEditor(u, body, actions, draft && draft.text); } }, [S.suggest]);
+    var suggestBtn = el("button", { type: "button", class: "btn btn-sm btn-outline-secondary", disabled: !current && u.status !== "stale" ? "" : null, onclick: function () { showEditor(u, body, actions, draft && draft.text); } }, [S.suggest]);
     actions.appendChild(approveBtn);
     actions.appendChild(suggestBtn);
     if (data.repo) {
@@ -473,7 +473,7 @@
     // The whole unit is edited as text; for code, the whole cell. A pending or
     // held-back suggestion is the starting point, so it can be fixed, not retyped.
     var ta = el("textarea", { class: "form-control" + (u.kind === "code" ? " tr-code" : ""), rows: String(u.kind === "code" ? Math.min(20, (draft || u.text || u.source).split("\n").length + 1) : 4), "aria-label": S.translation, spellcheck: u.kind === "code" ? "false" : null });
-    ta.value = draft || u.text || "";
+    ta.value = draft || u.text || u.previous || "";
     var fields = [{ input: ta, before: u.text || "" }];
     form.appendChild(ta);
     form.appendChild(el("div", { class: "tr-actions" }, [

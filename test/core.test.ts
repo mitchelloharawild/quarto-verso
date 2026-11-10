@@ -175,3 +175,30 @@ test('contributions: unit operations and the PR checks', async () => {
   const again = applyOps(e.tfile, s1, [{ op: 'replace', id, text: 'Premier paragraphe avec `code` et @fig-x.' }, { op: 'approve', id }], 'gh:carol', '2026-11-11');
   assert.deepEqual(again.dropped.map((d) => d.done), [true, true]);
 });
+
+test('contributions: a stale unit can be re-translated but not approved', async () => {
+  const { units } = await extractUnits(DOC, md);
+  const s0 = syncUnits('a.qmd', units, undefined);
+  const t = toTFile('a.qmd', 'fr', s0);
+  t.units = s0.map((u) => translatedUnit(u, u.src.kind === 'code' ? '# Le dessiner\nplot(1, main = "Titre")' : `Texte ${u.src.source}`, origin));
+  const edited = DOC.replace('First paragraph', 'The first paragraph');
+  const newUnits = (await extractUnits(edited, md)).units;
+  const s2 = syncUnits('a.qmd', newUnits, t);
+  const id = s2[2].id;
+  assert.equal(s2[2].status, 'stale');
+  const r = applyOps(t, s2, [{ op: 'approve', id }, { op: 'replace', id, text: 'Le premier paragraphe avec `code` et @fig-x.' }], 'gh:carol', '2026-11-11');
+  assert.deepEqual(r.applied.map((o) => o.op), ['replace']);
+  assert.match(r.dropped[0].reason, /stale/);
+  assert.equal(syncUnits('a.qmd', newUnits, r.tfile)[2].status, 'current');
+
+  const P = '_i18n/fr/_project.yml';
+  const ctx = { prefix: '', md, units: async () => newUnits, readUnchanged: () => undefined, author: 'gh:carol', branch: 'i18n/carol/x' };
+  const base = new Map([[P, stringifyTFile(t)]]);
+  const ok = await checkContribution(base, new Map([[P, stringifyTFile(r.tfile)]]), [P], ctx);
+  assert.ok(ok.every((c) => c.ok), JSON.stringify(ok.filter((c) => !c.ok)));
+  // Changing the source fields without re-translating, or to something other than the current source, fails.
+  const forged = structuredClone(r.tfile);
+  forged.units[2]['source-hash'] = 'deadbeef';
+  const bad = await checkContribution(base, new Map([[P, stringifyTFile(forged)]]), [P], ctx);
+  assert.equal(bad.every((c) => c.ok), false);
+});

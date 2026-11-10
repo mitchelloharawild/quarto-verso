@@ -34,8 +34,11 @@ export function applyOps(tfile: TFile, synced: SyncedUnit[], ops: UnitOp[], auth
       dropped.push({ op, reason: 'unknown unit' });
       continue;
     }
-    if (status.get(op.id) !== 'current') {
-      dropped.push({ op, reason: `unit is ${status.get(op.id) ?? 'not in the current source'}` });
+    const st = status.get(op.id);
+    // A stale unit can't be approved (its translation is of older source), but a
+    // new translation of the current source can replace it.
+    if (st !== 'current' && !(st === 'stale' && op.op === 'replace')) {
+      dropped.push({ op, reason: `unit is ${st ?? 'not in the current source'}` });
       continue;
     }
     if (op.op === 'approve') {
@@ -58,6 +61,13 @@ export function applyOps(tfile: TFile, synced: SyncedUnit[], ops: UnitOp[], auth
       continue;
     }
     u.text = text;
+    if (st === 'stale') {
+      // Re-anchor the unit to the current source.
+      const src = synced.find((x) => x.id === op.id)!.src;
+      u['source-hash'] = src.hash;
+      u.source = src.source;
+      delete u.terms;
+    }
     u.origin = { by: author, date };
     u.reviews = [{ by: author, date }];
     touchedText.add(u.id);
@@ -121,6 +131,7 @@ export async function checkContribution(base: Map<string, string>, head: Map<str
   }
 
   const cands: Candidate[] = [];
+  const reanchored = new Map<string, string[]>();
   for (const f of files) {
     const rel = f.path.slice(ctx.prefix.length + `_i18n/${f.lang}/`.length);
     const headText = head.get(f.path);
@@ -156,9 +167,14 @@ export async function checkContribution(base: Map<string, string>, head: Map<str
     for (let i = 0; i < a.units.length; i++) {
       const ua = a.units[i];
       const ub = b.units[i];
+      // Source fields may only change by re-anchoring a stale unit to the current source (checked below).
+      const moved: string[] = [];
       for (const k of ['kind', 'section', 'cell', 'field', 'source-hash', 'source'] as const) {
-        if (ua[k] !== ub[k]) fail(2, `${f.path} ${ua.id}: ${k} changed`);
+        if (ua[k] === ub[k]) continue;
+        if (k === 'source-hash' || k === 'source') moved.push(k);
+        else fail(2, `${f.path} ${ua.id}: ${k} changed`);
       }
+      if (moved.length) reanchored.set(ua.id + '\0' + f.path, moved);
       // Unknown keys already on the default branch are not the contributor's doing;
       // only adding or changing one fails. Removing one is a harmless cleanup.
       const extra = unknownKeys(ub).filter((k) => JSON.stringify((ua as any)[k]) !== JSON.stringify((ub as any)[k]));
@@ -178,11 +194,14 @@ export async function checkContribution(base: Map<string, string>, head: Map<str
     const byId = new Map(synced.map((s) => [s.id, s]));
     for (const { a: ua, b: ub } of changedUnits) {
       const s = byId.get(ua.id);
-      if (!s || s.status === 'missing' || s.src.hash !== ua['source-hash']) {
+      const textChanged = ua.text !== ub.text;
+      const moved = reanchored.get(ua.id + '\0' + f.path);
+      const stale = !!s && s.status !== 'missing' && s.src.hash !== ua['source-hash'];
+      if (!s || s.status === 'missing' || (stale && !(textChanged && s.src.hash === ub['source-hash'] && s.src.source === ub.source))) {
         fail(3, `${f.path} ${ua.id}: unit is stale or not in the current source`);
         continue;
       }
-      const textChanged = ua.text !== ub.text;
+      if (moved && !stale) fail(2, `${f.path} ${ua.id}: ${moved.join(', ')} changed`);
       const ra = (ua.reviews ?? []).map((r) => r.by);
       const rb = (ub.reviews ?? []).map((r) => r.by);
       if (new Set(rb).size !== rb.length) fail(5, `${f.path} ${ua.id}: a person reviewed twice`);
