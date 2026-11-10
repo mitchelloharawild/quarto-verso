@@ -18,7 +18,14 @@ ARG TARGETARCH
 ADD https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-linux-${TARGETARCH}.tar.gz /tmp/pandoc.tar.gz
 RUN tar -xzf /tmp/pandoc.tar.gz --strip-components=2 -C /usr/local/bin "pandoc-${PANDOC_VERSION}/bin/pandoc"
 
-FROM node:24-slim
+# Runtime: bare Alpine plus the node binary only (no npm, corepack or yarn; the
+# service is one bundled file). busybox supplies the `tar` the service shells out to.
+FROM alpine:3 AS runtime-base
+RUN apk add --no-cache libstdc++ \
+ && adduser -D -u 1000 node
+COPY --from=node:24-alpine /usr/local/bin/node /usr/local/bin/node
+
+FROM runtime-base
 LABEL org.opencontainers.image.source="https://github.com/mitchelloharawild/quarto-verso" \
       org.opencontainers.image.description="verso-i18n PR service: translation reviews from Quarto sites as GitHub pull requests" \
       org.opencontainers.image.licenses="MIT"
