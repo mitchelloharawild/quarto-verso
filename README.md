@@ -1,4 +1,4 @@
-# quarto-verso
+# quarto-verso <picture><source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg"><img src="assets/logo.svg" alt="verso logo" align="right" height="110"></picture>
 
 A Quarto extension for translating a single-language project. Authors write
 the source; translations are stored under `_i18n/`, built into `/<lang>/`
