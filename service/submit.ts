@@ -192,17 +192,33 @@ export async function submit(ctx: SubmitContext, site: Site, reader: Reader, bod
 
   // The default branch's tree plus this PR's files; also parented on the default branch.
   const fork = await ensureFork(ctx, site, writeToken);
-  const baseCommit = await gh(writeToken, 'GET', `/repos/${fork}/git/commits/${site.sha}`);
+  let baseCommit = await gh(writeToken, 'GET', `/repos/${fork}/git/commits/${site.sha}`);
+  let parents = [site.sha];
+  let ref = await ghMaybe(writeToken, 'GET', `/repos/${fork}/git/ref/heads/${branch}`);
+  // The writer App has no `workflows` permission, and GitHub refuses a ref update that changes
+  // .github/workflows/. When the branch's workflows are stale (the default branch changed them
+  // since), don't move them: carry on from the branch itself, or start the branch afresh if no PR uses it.
+  if (ref) {
+    const tip = await gh(writeToken, 'GET', `/repos/${fork}/git/commits/${ref.object.sha}`);
+    const workflows = async (sha: string) => ((await ghMaybe(writeToken, 'GET', `/repos/${fork}/contents/.github?ref=${sha}`)) ?? []).find?.((e: any) => e.name === 'workflows')?.sha;
+    if ((await workflows(ref.object.sha)) !== (await workflows(site.sha))) {
+      if (open) {
+        // The PR diff is against the merge base, so the stale (older) branch keeps it free of workflow changes.
+        baseCommit = tip;
+        parents = [ref.object.sha];
+      } else {
+        await gh(writeToken, 'DELETE', `/repos/${fork}/git/refs/heads/${branch}`);
+        ref = null;
+      }
+    } else if (open) {
+      const cmp = await gh(writeToken, 'GET', `/repos/${fork}/compare/${site.sha}...${ref.object.sha}`);
+      parents = cmp.status === 'ahead' || cmp.status === 'identical' ? [ref.object.sha] : [ref.object.sha, site.sha];
+    }
+  }
   const tree = await gh(writeToken, 'POST', `/repos/${fork}/git/trees`, {
     base_tree: baseCommit.tree.sha,
     tree: Object.entries(head).map(([p, content]) => ({ path: p, mode: '100644', type: 'blob', content })),
   });
-  let parents = [site.sha];
-  const ref = await ghMaybe(writeToken, 'GET', `/repos/${fork}/git/ref/heads/${branch}`);
-  if (open && ref) {
-    const cmp = await gh(writeToken, 'GET', `/repos/${fork}/compare/${site.sha}...${ref.object.sha}`);
-    parents = cmp.status === 'ahead' || cmp.status === 'identical' ? [ref.object.sha] : [ref.object.sha, site.sha];
-  }
   const approvals = res.applied.filter((o) => o.op === 'approve').length;
   const edits = res.applied.length - approvals;
   const pagesNow = [...new Set(res.applied.map((o) => o.file))];
