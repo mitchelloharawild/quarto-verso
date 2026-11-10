@@ -5,12 +5,7 @@ import { align } from './align.ts';
 import { fnv1a } from './hash.ts';
 import type { DisplayStatus, SourceUnit, SyncedUnit, TFile, TUnit } from './types.ts';
 
-export interface SyncOptions {
-  /** Current hash of each per-language glossary term (key → hash); units that used an older term go stale. */
-  termHashes?: Record<string, string>;
-}
-
-export function syncUnits(file: string, units: SourceUnit[], tfile: TFile | undefined, opts: SyncOptions = {}): SyncedUnit[] {
+export function syncUnits(file: string, units: SourceUnit[], tfile: TFile | undefined): SyncedUnit[] {
   const stored = tfile?.units ?? [];
   const ops = align(
     stored,
@@ -24,9 +19,7 @@ export function syncUnits(file: string, units: SourceUnit[], tfile: TFile | unde
   for (const op of ops) {
     if (op.op === 'equal') {
       const s = stored[op.a];
-      let status: SyncedUnit['status'] = hasText(s) ? 'current' : 'missing';
-      if (status === 'current' && termsChanged(s, opts.termHashes)) status = 'stale';
-      out[op.b] = { id: s.id, src: units[op.b], stored: s, status };
+      out[op.b] = { id: s.id, src: units[op.b], stored: s, status: hasText(s) ? 'current' : 'missing' };
     } else if (op.op === 'replace') {
       const s = stored[op.a];
       out[op.b] = { id: s.id, src: units[op.b], stored: s, status: hasText(s) ? 'stale' : 'missing' };
@@ -39,11 +32,6 @@ export function syncUnits(file: string, units: SourceUnit[], tfile: TFile | unde
 
 function hasText(s: TUnit): boolean {
   return typeof s.text === 'string' && s.text.length > 0;
-}
-
-function termsChanged(s: TUnit, hashes: Record<string, string> | undefined): boolean {
-  if (!s.terms || !hashes) return false;
-  return Object.entries(s.terms).some(([k, h]) => hashes[k] !== undefined && hashes[k] !== h);
 }
 
 /** Deterministic id for a new unit: from file, source hash and occurrence index. */

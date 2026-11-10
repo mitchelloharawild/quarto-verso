@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml, parseDocument } from 'yaml';
 import { pandocMarkdown } from '../adapters/markdown.ts';
-import { parseLangGlossary, parseSourceGlossary, stringifyLangGlossary, termHashes } from '../core/glossary.ts';
+import { parseLangGlossary, parseSourceGlossary, stringifyLangGlossary } from '../core/glossary.ts';
 import { syncUnits } from '../core/sync.ts';
 import { parseTrack, readDoc, stringifyTrack, withPolicy, writeDoc, type DocRead } from '../core/tdoc.ts';
 import { parseTFile, stringifyTFile } from '../core/tfile.ts';
@@ -230,7 +230,7 @@ export class Project {
   async state(lang: string, file: string): Promise<FileState> {
     const { units, issues } = await this.units(file);
     const { tfile, doc } = await this.loadTFile(lang, file);
-    const synced = syncUnits(file, units, tfile, { termHashes: termHashes(this.glossary(), this.langGlossary(lang)) });
+    const synced = syncUnits(file, units, tfile);
     if (doc) await this.recoverSources(file, synced);
     return { file, units, synced, tfile, issues, doc };
   }

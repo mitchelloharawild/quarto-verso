@@ -67,16 +67,6 @@ export function stringifyLangGlossary(lang: string, g: Record<string, LangGlossa
   return doc.toString({ lineWidth: 0 });
 }
 
-/** Hash of each current target term, for glossary-driven staleness. */
-export function termHashes(entries: GlossaryEntry[], lang: Record<string, LangGlossaryEntry>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const e of entries) {
-    const l = lang[e.key];
-    if (l && l['source-hash'] === entryHash(e)) out[e.key] = targetHash(l);
-  }
-  return out;
-}
-
 /** Plain text only: no Markdown, HTML, shortcodes or code. */
 export function isPlainText(s: string): boolean {
   return !/[<>`{}[\]$\\*_|]/.test(s) && !/\n/.test(s);
