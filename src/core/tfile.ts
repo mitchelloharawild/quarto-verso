@@ -7,7 +7,7 @@ import { Document, isMap, isPair, isScalar, isSeq, parse, visit } from 'yaml';
 import type { TFile, TUnit } from './types.ts';
 
 /** The keys a unit may have, in the order they are written. */
-export const UNIT_KEYS = ['id', 'kind', 'section', 'cell', 'field', 'source-hash', 'source', 'text', 'terms', 'origin', 'reviews', 'reverted'];
+export const UNIT_KEYS = ['id', 'kind', 'section', 'cell', 'field', 'source-hash', 'source', 'text', 'origin', 'reviews', 'reverted'];
 
 /** Keys of a unit this version does not know (left by an older or newer version). */
 export const unknownKeys = (u: object): string[] => Object.keys(u).filter((k) => !UNIT_KEYS.includes(k));
@@ -44,11 +44,11 @@ export function parseTFile(text: string): TFile {
 export function stringifyTFile(t: TFile): string {
   const doc = new Document({ source: t.source, lang: t.lang, units: t.units.map(knownPart) }, { aliasDuplicateObjects: false });
   doc.commentBefore = ' ' + header(t.source).replace(/\n/g, '\n ');
-  flowStyle(doc, ['origin', 'reviews', 'terms']);
+  flowStyle(doc, ['origin', 'reviews']);
   return doc.toString({ lineWidth: 0, defaultKeyType: 'PLAIN', singleQuote: false });
 }
 
-/** Render small maps (origin, reviews entries, terms) in flow style for compact diffs. */
+/** Render small maps (origin, reviews entries) in flow style for compact diffs. */
 export function flowStyle(doc: Document, keys: string[]): void {
   visit(doc, {
     Pair(_k, pair) {

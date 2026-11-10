@@ -2,7 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { entryHash, hits, isPlainText, targetHash } from '../core/glossary.ts';
+import { entryHash, hits, isPlainText } from '../core/glossary.ts';
 import { protect, unprotect } from '../core/protect.ts';
 import { languageName } from '../core/strings.ts';
 import { toTFile, translatedUnit } from '../core/sync.ts';
@@ -171,7 +171,7 @@ export async function applyWork(p: Project, file: string, log: Log, answersFile?
   const origin = { by: 'llm', model: wf.model ?? 'unknown', date };
   const res: ApplyResult = { applied: 0, glossary: 0, skipped: [], rejected: [] };
 
-  // Glossary first, so units record the terms they were translated with.
+  // Glossary first.
   const glossary = p.glossary();
   const lg = p.langGlossary(lang);
   for (const it of wf.items.filter((x) => x.kind === 'glossary')) {
@@ -233,10 +233,8 @@ export async function applyWork(p: Project, file: string, log: Log, answersFile?
         res.rejected.push({ key: c.item.key, reason: r });
         continue;
       }
-      const used = hits(glossary, c.src.source);
-      const terms = Object.fromEntries(used.filter((e) => lg[e.key]).map((e) => [e.key, targetHash(lg[e.key])]));
       const k = tfile.units.findIndex((x) => x.id === c.id);
-      tfile.units[k] = translatedUnit(c.u, c.src.kind === 'code' ? normaliseCode(c.text!) : c.text!, origin, terms);
+      tfile.units[k] = translatedUnit(c.u, c.src.kind === 'code' ? normaliseCode(c.text!) : c.text!, origin);
       res.applied++;
     }
     await p.saveTFile(tfile, st.doc?.raw);

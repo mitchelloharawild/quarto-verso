@@ -56,8 +56,6 @@ export interface TUnit {
   source?: string;
   /** Translation: Markdown, plain text, or the whole translated cell body (code). */
   text?: string;
-  /** Glossary keys used when translating, with the hash of the target term then. */
-  terms?: Record<string, string>;
   origin?: Origin;
   reviews?: Review[];
   reverted?: string;

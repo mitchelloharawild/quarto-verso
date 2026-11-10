@@ -87,10 +87,9 @@ export function blankUnit(u: SyncedUnit): TUnit {
 }
 
 /** A fresh translation of a unit (from `translate`): new text, reviews cleared. */
-export function translatedUnit(u: SyncedUnit, text: string, origin: TUnit['origin'], terms?: Record<string, string>): TUnit {
+export function translatedUnit(u: SyncedUnit, text: string, origin: TUnit['origin']): TUnit {
   const t = blankUnit(u);
   t.text = text;
-  if (terms && Object.keys(terms).length) t.terms = terms;
   t.origin = origin;
   t.reviews = [];
   return t;

@@ -66,7 +66,6 @@ export function applyOps(tfile: TFile, synced: SyncedUnit[], ops: UnitOp[], auth
       const src = synced.find((x) => x.id === op.id)!.src;
       u['source-hash'] = src.hash;
       u.source = src.source;
-      delete u.terms;
     }
     u.origin = { by: author, date };
     u.reviews = [{ by: author, date }];
@@ -221,7 +220,7 @@ export async function checkContribution(base: Map<string, string>, head: Map<str
         const added = rb.filter((r) => !ra.includes(r));
         if (removed.length) fail(5, `${f.path} ${ua.id}: reviews removed (${removed.join(', ')})`);
         if (added.some((r) => r !== ctx.author)) fail(5, `${f.path} ${ua.id}: review added for someone else (${added.join(', ')})`);
-        if (JSON.stringify(ua.origin) !== JSON.stringify(ub.origin) || JSON.stringify(ua.terms) !== JSON.stringify(ub.terms)) fail(5, `${f.path} ${ua.id}: origin changed without a text change`);
+        if (JSON.stringify(ua.origin) !== JSON.stringify(ub.origin)) fail(5, `${f.path} ${ua.id}: origin changed without a text change`);
       }
     }
   }

@@ -39,7 +39,6 @@ export async function syncDocs(p: Project, langs: string[], opts: { by?: string;
         if (!st.doc.untracked.has(u.id)) continue;
         u.origin = { by: by ?? 'unknown', date };
         u.reviews = by ? [{ by, date }] : [];
-        delete u.terms;
         res.recorded.push(u.id);
       }
       const before = p.storedPaths(lang, file).map((r) => readOr(p, r));

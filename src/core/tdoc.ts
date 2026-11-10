@@ -18,7 +18,7 @@ export interface TrackFile {
   units: TrackUnit[];
 }
 
-export const TRACK_KEYS = ['id', 'kind', 'section', 'cell', 'field', 'source-hash', 'text-hash', 'terms', 'origin', 'reviews'];
+export const TRACK_KEYS = ['id', 'kind', 'section', 'cell', 'field', 'source-hash', 'text-hash', 'origin', 'reviews'];
 
 export function normaliseText(kind: UnitKind, s: string): string {
   return kind === 'code' ? normaliseCode(s) : normaliseBlockText(s);
@@ -59,7 +59,7 @@ export function stringifyTrack(t: TrackFile, docPath: string): string {
   });
   const doc = new Document({ source: t.source, lang: t.lang, units }, { aliasDuplicateObjects: false });
   doc.commentBefore = ' ' + trackHeader(t.source, docPath).replace(/\n/g, '\n ');
-  flowStyle(doc, ['origin', 'reviews', 'terms']);
+  flowStyle(doc, ['origin', 'reviews']);
   return doc.toString({ lineWidth: 0, defaultKeyType: 'PLAIN', singleQuote: false });
 }
 
